@@ -41,11 +41,20 @@ export default function App() {
     }
   }, []);
 
-  // Refresh every 5 seconds so everyone sees new reports.
+  // Refresh every 10 seconds while the page is on screen. Pauses when the phone
+  // is locked or the app is in the background (saves database requests and battery),
+  // and refreshes immediately when you come back.
   useEffect(() => {
     load();
-    const t = window.setInterval(load, 5000);
-    return () => window.clearInterval(t);
+    const t = window.setInterval(() => {
+      if (document.visibilityState === "visible") load();
+    }, 10000);
+    const onVisible = () => document.visibilityState === "visible" && load();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [load]);
 
   // Live "you are here" position.

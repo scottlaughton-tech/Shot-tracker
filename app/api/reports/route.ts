@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { isAuthed } from "@/lib/auth";
-import { addReport, clearReports, getInterval, hasDatabase, listReports } from "@/lib/store";
+import { addReport, clearReports, hasDatabase, loadAll } from "@/lib/store";
 import { declinationAt } from "@/lib/declination";
 import { norm360, type Report } from "@/lib/geo";
 
@@ -10,7 +10,7 @@ const unauthorized = () => NextResponse.json({ error: "Not signed in" }, { statu
 
 export async function GET() {
   if (!(await isAuthed())) return unauthorized();
-  const [reports, intervalMin] = await Promise.all([listReports(), getInterval()]);
+  const { reports, intervalMin } = await loadAll();
   return NextResponse.json({ reports, intervalMin, hasDatabase });
 }
 

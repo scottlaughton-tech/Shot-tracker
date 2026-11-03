@@ -10,18 +10,28 @@ const redis = url && token ? new Redis({ url, token }) : null;
 
 export const hasDatabase = !!redis;
 
+// Everything lives in ONE hash so a refresh costs a single database command
+// (the free plan allows 500k commands/month). The setting uses a reserved field.
 const REPORTS = "shot-tracker:reports";
-const INTERVAL = "shot-tracker:intervalMin";
+const SETTINGS_FIELD = "__settings";
 const DEFAULT_INTERVAL = 2;
 
 type Mem = { reports: Map<string, Report>; interval: number };
 const g = globalThis as unknown as { __shotMem?: Mem };
 const mem: Mem = (g.__shotMem ??= { reports: new Map(), interval: DEFAULT_INTERVAL });
 
-export async function listReports(): Promise<Report[]> {
-  if (!redis) return [...mem.reports.values()];
-  const all = (await redis.hgetall<Record<string, Report | string>>(REPORTS)) ?? {};
-  return Object.values(all).map((v) => (typeof v === "string" ? (JSON.parse(v) as Report) : v));
+/** Reports + shared grouping interval, in one database read. */
+export async function loadAll(): Promise<{ reports: Report[]; intervalMin: number }> {
+  if (!redis) return { reports: [...mem.reports.values()], intervalMin: mem.interval };
+  const all = (await redis.hgetall<Record<string, unknown>>(REPORTS)) ?? {};
+  const parse = (v: unknown) => (typeof v === "string" ? JSON.parse(v) : v);
+  let intervalMin = DEFAULT_INTERVAL;
+  const reports: Report[] = [];
+  for (const [k, v] of Object.entries(all)) {
+    if (k === SETTINGS_FIELD) intervalMin = Number((parse(v) as { intervalMin?: number }).intervalMin) || DEFAULT_INTERVAL;
+    else reports.push(parse(v) as Report);
+  }
+  return { reports, intervalMin };
 }
 
 export async function addReport(r: Report): Promise<void> {
@@ -30,22 +40,20 @@ export async function addReport(r: Report): Promise<void> {
 }
 
 export async function deleteReport(id: string): Promise<void> {
+  if (id === SETTINGS_FIELD) return;
   if (!redis) return void mem.reports.delete(id);
   await redis.hdel(REPORTS, id);
 }
 
+/** Deletes every report but keeps the interval setting. */
 export async function clearReports(): Promise<void> {
   if (!redis) return void mem.reports.clear();
+  const { intervalMin } = await loadAll();
   await redis.del(REPORTS);
-}
-
-export async function getInterval(): Promise<number> {
-  if (!redis) return mem.interval;
-  const v = await redis.get<number>(INTERVAL);
-  return typeof v === "number" ? v : Number(v) || DEFAULT_INTERVAL;
+  await setInterval(intervalMin);
 }
 
 export async function setInterval(min: number): Promise<void> {
   if (!redis) return void (mem.interval = min);
-  await redis.set(INTERVAL, min);
+  await redis.hset(REPORTS, { [SETTINGS_FIELD]: JSON.stringify({ intervalMin: min }) });
 }
