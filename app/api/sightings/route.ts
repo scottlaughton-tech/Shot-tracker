@@ -22,6 +22,9 @@ export async function POST(req: Request) {
   const accuracy = b.accuracy == null ? null : Number(b.accuracy);
   const note = String(b.note ?? "").trim().slice(0, 120);
   const now = Date.now();
+  const ob = b.observer as { lat?: unknown; lon?: unknown } | null | undefined;
+  const obLat = Number(ob?.lat), obLon = Number(ob?.lon);
+  const observer = ob && obLat >= -90 && obLat <= 90 && obLon >= -180 && obLon <= 180 ? { lat: obLat, lon: obLon } : null;
 
   const errors: string[] = [];
   if (!name) errors.push("First name is required");
@@ -35,7 +38,7 @@ export async function POST(req: Request) {
   const sighting: Sighting = {
     id: SIGHTING_PREFIX + randomUUID(), name, lat, lon,
     accuracy: accuracy != null && isFinite(accuracy) ? accuracy : null,
-    deer, count, note,
+    deer, count, note, observer,
     headingInput: headingIn == null ? null : norm360(headingIn),
     headingRef: ref, declination,
     heading: headingIn == null ? null : norm360(headingIn + declination),

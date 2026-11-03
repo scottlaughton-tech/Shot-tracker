@@ -1,11 +1,11 @@
 "use client";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { compassPoint, groupShots, triangulate, type Report, type Fix, type Shot, type Sighting, type Sign, type Blind } from "@/lib/geo";
+import { bearingTo, compassPoint, distance, formatDistance, groupShots, triangulate, type Report, type Fix, type Shot, type Sighting, type Sign, type Blind } from "@/lib/geo";
 import { colorFor, DEER_STYLE, deerText, SIGN_COLOR, SIGN_STYLE, BLIND_COLOR, BLIND_STYLE } from "@/lib/colors";
 import { beep, unlockAudio, vibrate } from "@/lib/alert";
 import { ago } from "@/lib/time";
-import ReportForm, { type ReportKind } from "./ReportForm";
+import ReportForm, { type Picked, type ReportKind } from "./ReportForm";
 import ShotList, { type LayerKey, type Layers } from "./ShotList";
 
 const ShotMap = dynamic(() => import("./ShotMap"), {
@@ -41,6 +41,11 @@ export default function App() {
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [me, setMe] = useState<Me>(null);
   const [formKind, setFormKind] = useState<ReportKind | null>(null);
+  // Map crosshair ("Pick on map") for deer, sign and blinds
+  const [picking, setPicking] = useState(false);
+  const [picked, setPicked] = useState<Picked>(null);
+  const [center, setCenter] = useState<{ lat: number; lon: number } | null>(null);
+  function openForm(k: ReportKind) { setPicked(null); setPicking(false); setFormKind(k); }
   const [panelOpen, setPanelOpen] = useState(false);
   const [focus, setFocus] = useState<{ key: string; n: number } | null>(null);
   const [offline, setOffline] = useState(false);
@@ -286,8 +291,29 @@ export default function App() {
 
       <div className="main">
         <div className="map-wrap">
-          <button className="blind-fab" onClick={() => setFormKind("blind")}>🟧 Add blind</button>
-          <ShotMap shots={mapShots} sightings={mapDeer} signs={mapSigns} blinds={mapBlinds} me={me} focus={focus} />
+          {!picking && <button className="blind-fab" onClick={() => openForm("blind")}>🟧 Add blind</button>}
+          <ShotMap shots={mapShots} sightings={mapDeer} signs={mapSigns} blinds={mapBlinds} me={me} focus={focus}
+            pickStart={picking ? (picked ?? (me ? { lat: me.lat, lon: me.lon } : null)) : undefined}
+            onCenter={(lat, lon) => setCenter({ lat, lon })} />
+          {picking && (
+            <>
+              <div className="crosshair" aria-hidden><span /></div>
+              <div className="pick-top">
+                <b>🎯 Drag the map</b> (or tap a spot) to put the crosshair on the {formKind === "deer" ? "deer" : formKind === "sign" ? "sign" : "blind"}.
+                {center && me && (
+                  <div className="pick-readout">
+                    {formatDistance(distance(me.lat, me.lon, center.lat, center.lon))} {compassPoint(bearingTo(me.lat, me.lon, center.lat, center.lon))} of you
+                    {" "}({Math.round(bearingTo(me.lat, me.lon, center.lat, center.lon))}°)
+                  </div>
+                )}
+              </div>
+              <div className="pick-bar">
+                <button className="btn big-ghost" onClick={() => setPicking(false)}>Cancel</button>
+                <button className="btn primary pick-ok" disabled={!center}
+                  onClick={() => { if (center) setPicked({ ...center }); setPicking(false); }}>✓ Use this spot</button>
+              </div>
+            </>
+          )}
         </div>
         <aside className={`panel ${panelOpen ? "open" : ""}`}>
           <ShotList
@@ -312,13 +338,13 @@ export default function App() {
             signs={sortedSigns}
             onClearSigns={clearSigns}
             blinds={sortedBlinds}
-            onAddBlind={() => { setPanelOpen(false); setFormKind("blind"); }}
+            onAddBlind={() => { setPanelOpen(false); openForm("blind"); }}
             onClearBlinds={clearBlinds}
           />
         </aside>
       </div>
 
-      {toast && (
+      {toast && !picking && (
         <button className="toast" style={{ borderLeftColor: toast.color }} onClick={() => {
           focusOn(toast.key);
           setToast(null);
@@ -329,17 +355,20 @@ export default function App() {
         </button>
       )}
 
-      <div className="fabs">
-        <button className="report-fab" onClick={() => setFormKind("shot")}>🔊 Heard a shot</button>
-        <button className="deer-fab" onClick={() => setFormKind("deer")} aria-label="Report a deer sighting">🦌 Deer</button>
-        <button className="sign-fab" onClick={() => setFormKind("sign")} aria-label="Mark deer sign">🍂 Sign</button>
+      <div className="fabs" style={picking ? { display: "none" } : undefined}>
+        <button className="report-fab" onClick={() => openForm("shot")}>🔊 Heard a shot</button>
+        <button className="deer-fab" onClick={() => openForm("deer")} aria-label="Report a deer sighting">🦌 Deer</button>
+        <button className="sign-fab" onClick={() => openForm("sign")} aria-label="Mark deer sign">🍂 Sign</button>
       </div>
 
       {formKind && (
         <ReportForm
           me={me}
           initialKind={formKind}
-          onClose={() => setFormKind(null)}
+          onClose={() => { setFormKind(null); setPicking(false); }}
+          picked={picked}
+          onStartPick={() => setPicking(true)}
+          hidden={picking}
           onSaved={(id) => { seen.current?.add(id); setFormKind(null); load(); }}
         />
       )}

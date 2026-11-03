@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { compassPoint, norm360 } from "@/lib/geo";
+import { bearingTo, compassPoint, distance, formatDistance, norm360 } from "@/lib/geo";
 import { declinationAt } from "@/lib/declination";
 import { BLIND_STYLE, SIGN_STYLE } from "@/lib/colors";
 import type { BlindType, SignType } from "@/lib/geo";
@@ -84,8 +84,15 @@ const DEER_TYPES = [
   { v: "fawn", label: "Fawn" }, { v: "unknown", label: "Not sure" },
 ] as const;
 
-export default function ReportForm({ me, initialKind, onClose, onSaved }: {
+export type Picked = { lat: number; lon: number } | null;
+
+export default function ReportForm({ me, initialKind, onClose, onSaved, picked, onStartPick, hidden }: {
   me: Me; initialKind: ReportKind; onClose: () => void; onSaved: (id: string) => void;
+  /** spot chosen with the map crosshair (deer / sign / blind) */
+  picked: Picked;
+  onStartPick: () => void;
+  /** true while the map crosshair is open: keep the form (and what's typed) but hide it */
+  hidden: boolean;
 }) {
   const tappedAt = useRef(Date.now()).current; // moment they tapped the button
   const [kind, setKind] = useState<ReportKind>(initialKind);
@@ -93,6 +100,7 @@ export default function ReportForm({ me, initialKind, onClose, onSaved }: {
   const [loc, setLoc] = useState<Loc | null>(null);
   const [gpsStatus, setGpsStatus] = useState("Getting your GPS location…");
   const [manual, setManual] = useState(false);
+  const [where, setWhere] = useState<"me" | "map">("me");
   const [mLat, setMLat] = useState("");
   const [mLon, setMLon] = useState("");
 
@@ -146,12 +154,18 @@ export default function ReportForm({ me, initialKind, onClose, onSaved }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const effLoc: Loc | null = manual
+  const canPick = kind !== "shot"; // shots are located by triangulation, so always from where you stand
+  const useMap = canPick && where === "map";
+  // when a spot has been picked, switch to "Pick on map" automatically
+  useEffect(() => { if (picked) setWhere("map"); }, [picked]);
+
+  const myLoc: Loc | null = manual
     ? (isFinite(parseFloat(mLat)) && isFinite(parseFloat(mLon))
         // Typed longitude is treated as West (North America), with or without a minus sign.
         ? { lat: parseFloat(mLat), lon: -Math.abs(parseFloat(mLon)), accuracy: null }
         : null)
     : loc;
+  const effLoc: Loc | null = useMap ? (picked ? { ...picked, accuracy: null } : null) : myLoc;
 
   const decl = effLoc ? declinationAt(effLoc.lat, effLoc.lon) : declinationAt(45.1, -78.3);
   const declText = `${Math.abs(decl).toFixed(1)}° ${decl < 0 ? "W" : "E"}`;
@@ -171,7 +185,7 @@ export default function ReportForm({ me, initialKind, onClose, onSaved }: {
     setError("");
     const t = new Date(time).getTime();
     if (!name.trim()) return setError("Enter your first name.");
-    if (!effLoc) return setError("Your location is needed.");
+    if (!effLoc) return setError(useMap ? "Pick the spot on the map first." : "Your location is needed.");
     if (isBlind) {
       if (!blindTitle.trim()) return setError("Give the blind a name, e.g. Cedar ridge.");
     } else if (isSign) {
@@ -184,7 +198,11 @@ export default function ReportForm({ me, initialKind, onClose, onSaved }: {
     save("st:name", name.trim());
     if (!noDirection && dirMode !== "still") save("st:mode", dirMode);
     save("st:ref", ref);
-    const base = { name: name.trim(), lat: effLoc.lat, lon: effLoc.lon, accuracy: effLoc.accuracy };
+    const base = {
+      name: name.trim(), lat: effLoc.lat, lon: effLoc.lon, accuracy: effLoc.accuracy,
+      // where the person was standing when they picked a spot on the map (drawn as a dotted line for deer)
+      observer: useMap && myLoc ? { lat: myLoc.lat, lon: myLoc.lon } : null,
+    };
     const res = await fetch(isBlind ? "/api/blinds" : isSign ? "/api/signs" : isDeer ? "/api/sightings" : "/api/reports", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -205,7 +223,7 @@ export default function ReportForm({ me, initialKind, onClose, onSaved }: {
   }
 
   return (
-    <div className="sheet-backdrop" onClick={onClose}>
+    <div className="sheet-backdrop" onClick={onClose} style={hidden ? { display: "none" } : undefined}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
         <div className="row between">
           <h2>{isBlind ? "Add a blind" : isSign ? "Mark deer sign" : isDeer ? "Report a deer" : "Report a shot"}</h2>
@@ -225,30 +243,48 @@ export default function ReportForm({ me, initialKind, onClose, onSaved }: {
         </label>
 
         <fieldset>
-          <legend>1 · Where you are</legend>
-          {!manual ? (
-            <>
-              {loc && (
-                <p className="mono">
-                  {loc.lat.toFixed(5)}°, {loc.lon.toFixed(5)}°
-                  {loc.accuracy != null && <span className="muted"> ±{Math.round(loc.accuracy)} m</span>}
-                </p>
-              )}
-              {gpsStatus && <p className={loc ? "muted" : "warn"}>{gpsStatus}</p>}
-              <div className="row gap wrap">
-                <button className="btn small" type="button" onClick={getGps}>📍 Refresh GPS</button>
-                <button className="btn small ghost" type="button" onClick={() => setManual(true)}>Enter coordinates</button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="row gap">
-                <label className="grow">Latitude (°N)<input inputMode="decimal" value={mLat} onChange={(e) => setMLat(e.target.value)} placeholder="45.0985" /></label>
-                <label className="grow">Longitude (°W)<input inputMode="decimal" value={mLon} onChange={(e) => setMLon(e.target.value)} placeholder="78.3197" /></label>
-              </div>
-              <button className="btn small ghost" type="button" onClick={() => setManual(false)}>Use GPS instead</button>
-            </>
+          <legend>1 · {kind === "shot" ? "Where you are" : isDeer ? "Where is the deer?" : isSign ? "Where is the sign?" : "Where is the blind?"}</legend>
+          {canPick && (
+            <div className="tabs where">
+              <button type="button" className={!useMap ? "on" : ""} onClick={() => setWhere("me")}>📍 Where I am</button>
+              <button type="button" className={useMap ? "on" : ""} onClick={() => { setWhere("map"); if (!picked) onStartPick(); }}>🎯 Pick on map</button>
+            </div>
           )}
+          {useMap ? (
+            picked ? (
+              <div className="picked">
+                <p><b>🎯 Spot picked</b>{myLoc && <> · {formatDistance(distance(myLoc.lat, myLoc.lon, picked.lat, picked.lon))} {compassPoint(bearingTo(myLoc.lat, myLoc.lon, picked.lat, picked.lon))} of you</>}</p>
+                <p className="mono muted">{picked.lat.toFixed(5)}°, {picked.lon.toFixed(5)}°</p>
+                <button className="btn small" type="button" onClick={onStartPick}>Move crosshair</button>
+              </div>
+            ) : (
+              <button className="btn" type="button" onClick={onStartPick}>🎯 Open map crosshair</button>
+            )
+          ) : (<>
+            {!manual ? (
+              <>
+                {loc && (
+                  <p className="mono">
+                    {loc.lat.toFixed(5)}°, {loc.lon.toFixed(5)}°
+                    {loc.accuracy != null && <span className="muted"> ±{Math.round(loc.accuracy)} m</span>}
+                  </p>
+                )}
+                {gpsStatus && <p className={loc ? "muted" : "warn"}>{gpsStatus}</p>}
+                <div className="row gap wrap">
+                  <button className="btn small" type="button" onClick={getGps}>📍 Refresh GPS</button>
+                  <button className="btn small ghost" type="button" onClick={() => setManual(true)}>Enter coordinates</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="row gap">
+                  <label className="grow">Latitude (°N)<input inputMode="decimal" value={mLat} onChange={(e) => setMLat(e.target.value)} placeholder="45.0985" /></label>
+                  <label className="grow">Longitude (°W)<input inputMode="decimal" value={mLon} onChange={(e) => setMLon(e.target.value)} placeholder="78.3197" /></label>
+                </div>
+                <button className="btn small ghost" type="button" onClick={() => setManual(false)}>Use GPS instead</button>
+              </>
+            )}
+          </>)}
         </fieldset>
 
         {isBlind && (
@@ -266,7 +302,7 @@ export default function ReportForm({ me, initialKind, onClose, onSaved }: {
               ))}
             </div>
             <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={120} placeholder="Note (optional), e.g. faces the creek, good for west wind" />
-            <p className="hint">Stand at the blind and use GPS, or tap <b>Enter coordinates</b> above if you&apos;re adding it from somewhere else.</p>
+            {!useMap && <p className="hint">Stand at the blind, or use <b>🎯 Pick on map</b> above if you&apos;re adding it from somewhere else.</p>}
           </fieldset>
         )}
 
@@ -281,7 +317,7 @@ export default function ReportForm({ me, initialKind, onClose, onSaved }: {
               ))}
             </div>
             <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={120} placeholder="Note (optional), e.g. fresh, still wet" />
-            <p className="hint">It&apos;s marked where you&apos;re standing, so stand at the sign.</p>
+            {!useMap && <p className="hint">Marked where you&apos;re standing. Or use <b>🎯 Pick on map</b> above.</p>}
           </fieldset>
         )}
 

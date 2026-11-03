@@ -3,7 +3,7 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { Fragment, useEffect, useMemo, useRef } from "react";
 import {
-  Circle, CircleMarker, LayersControl, MapContainer, Marker, Polygon, Polyline, Popup, TileLayer, Tooltip, useMap,
+  Circle, CircleMarker, LayersControl, MapContainer, Marker, Polygon, Polyline, Popup, TileLayer, Tooltip, useMap, useMapEvents,
 } from "react-leaflet";
 import { bearingTo, compassPoint, destination, distance, ellipsePolygon, formatDistance, type Sighting, type Sign, type Blind } from "@/lib/geo";
 import { BLIND_STYLE, DEER_STYLE, SIGN_STYLE } from "@/lib/colors";
@@ -70,8 +70,28 @@ function FitBounds({ shots, sightings, signs, blinds, me, focus }: {
   return null;
 }
 
-export default function ShotMap({ shots, sightings, signs, blinds, me, focus }: {
+/** Crosshair mode: the map centre is the chosen spot. Dragging moves it; a tap slides that spot to the centre. */
+function PickMode({ start, onCenter }: { start: { lat: number; lon: number } | null; onCenter: (lat: number, lon: number) => void }) {
+  const map = useMap();
+  useEffect(() => {
+    if (start) map.setView([start.lat, start.lon], Math.max(map.getZoom(), 15));
+    else if (map.getZoom() < 15) map.setZoom(15);
+    const c = map.getCenter();
+    onCenter(c.lat, c.lng);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useMapEvents({
+    move: () => { const c = map.getCenter(); onCenter(c.lat, c.lng); },
+    click: (e) => map.panTo(e.latlng),
+  });
+  return null;
+}
+
+export default function ShotMap({ shots, sightings, signs, blinds, me, focus, pickStart, onCenter }: {
   shots: ShotView[]; sightings: Sighting[]; signs: Sign[]; blinds: Blind[]; me: Me; focus: { key: string; n: number } | null;
+  /** set (even to null) while the crosshair is open */
+  pickStart?: { lat: number; lon: number } | null;
+  onCenter?: (lat: number, lon: number) => void;
 }) {
   const icons = useMemo(() => new Map(shots.map((s) => [s.key, estimateIcon(s.color, String(s.index + 1))])), [shots]);
 
@@ -101,6 +121,7 @@ export default function ShotMap({ shots, sightings, signs, blinds, me, focus }: 
         </LayersControl.BaseLayer>
       </LayersControl>
 
+      {pickStart !== undefined && onCenter && <PickMode start={pickStart} onCenter={onCenter} />}
       <FitBounds shots={shots} sightings={sightings} signs={signs} blinds={blinds} me={me} focus={focus} />
 
       {blinds.map((x) => (
@@ -230,6 +251,10 @@ function SightingLayer({ d, me }: { d: Sighting; me: Me }) {
   }
   return (
     <>
+      {d.observer && (
+        <Polyline positions={[[d.observer.lat, d.observer.lon], [d.lat, d.lon]]}
+          pathOptions={{ color: "#333", weight: 1.5, dashArray: "2 6", opacity: 0.7 * opacity }} />
+      )}
       {arrow && head && (
         <>
           <Polyline positions={arrow} pathOptions={{ color: "#fff", weight: 6, opacity: 0.6 * opacity }} />
@@ -244,6 +269,7 @@ function SightingLayer({ d, me }: { d: Sighting; me: Me }) {
           {fmtTime(d.time)}<br />
           {d.heading == null ? "Not moving" : <>Heading {compassPoint(d.heading)} ({Math.round(d.heading)}° true)</>}
           {d.note && <><br />“{d.note}”</>}
+          {d.observer && <><br /><span style={{ color: "#666" }}>Spotted from {formatDistance(distance(d.observer.lat, d.observer.lon, d.lat, d.lon))} away (dotted line)</span></>}
           {me && (
             <>
               <br />

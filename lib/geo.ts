@@ -26,6 +26,7 @@ export type Sighting = {
   deer: DeerType;
   count: number;
   heading: number | null; // direction of travel, degrees TRUE; null = not moving
+  observer?: { lat: number; lon: number } | null; // where the reporter stood, if the spot was picked on the map
   headingInput: number | null;
   headingRef: "magnetic" | "true";
   declination: number;
