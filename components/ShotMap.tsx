@@ -106,7 +106,18 @@ function RulerMode({ onAdd }: { onAdd: (lat: number, lon: number) => void }) {
   return null;
 }
 
-export default function ShotMap({ shots, sightings, signs, blinds, me, focus, pickStart, onCenter, goto, ruler, onRulerAdd, aim }: {
+/** "🗑 Delete" button shown at the bottom of a popup. */
+function DelBtn({ id, onDelete, label = "Delete" }: { id: string; onDelete?: (id: string) => void; label?: string }) {
+  const map = useMap();
+  if (!onDelete) return null;
+  return (
+    <div className="popup-actions">
+      <button className="popup-del" onClick={() => { map.closePopup(); onDelete(id); }}>🗑 {label}</button>
+    </div>
+  );
+}
+
+export default function ShotMap({ shots, sightings, signs, blinds, me, focus, pickStart, onCenter, goto, ruler, onRulerAdd, aim, onDelete }: {
   shots: ShotView[]; sightings: Sighting[]; signs: Sign[]; blinds: Blind[]; me: Me; focus: { key: string; n: number } | null;
   /** set (even to null) while the crosshair is open */
   pickStart?: { lat: number; lon: number } | null;
@@ -117,6 +128,7 @@ export default function ShotMap({ shots, sightings, signs, blinds, me, focus, pi
   onRulerAdd?: (lat: number, lon: number) => void;
   /** "On map" direction: line from the deer to the crosshair */
   aim?: { from: { lat: number; lon: number }; to: { lat: number; lon: number } };
+  onDelete?: (id: string) => void;
 }) {
   const icons = useMemo(() => new Map(shots.map((s) => [s.key, estimateIcon(s.color, String(s.index + 1))])), [shots]);
 
@@ -173,26 +185,27 @@ export default function ShotMap({ shots, sightings, signs, blinds, me, focus, pi
             {x.note && <><br />“{x.note}”</>}
             <br />{x.lat.toFixed(5)}, {x.lon.toFixed(5)}
             {me && <><br />{formatDistance(distance(me.lat, me.lon, x.lat, x.lon))} {compassPoint(bearingTo(me.lat, me.lon, x.lat, x.lon))} of you</>}
+            <DelBtn id={x.id} onDelete={onDelete} label="Delete blind" />
           </Popup>
         </Marker>
       ))}
 
       {signs.map((x) => (
         <Marker key={x.id} position={[x.lat, x.lon]} icon={signIcon(x)}>
-          <Tooltip direction="right" offset={[12, 0]}>{SIGN_STYLE[x.sign].label}</Tooltip>
           <Popup>
             <b>{SIGN_STYLE[x.sign].label}</b><br />
             Marked by {x.name}, {fmtTime(x.time)}
             {x.note && <><br />“{x.note}”</>}
             {me && <><br />{formatDistance(distance(me.lat, me.lon, x.lat, x.lon))} {compassPoint(bearingTo(me.lat, me.lon, x.lat, x.lon))} of you</>}
+            <DelBtn id={x.id} onDelete={onDelete} />
           </Popup>
         </Marker>
       ))}
 
-      {sightings.map((d) => <SightingLayer key={d.id} d={d} me={me} />)}
+      {sightings.map((d) => <SightingLayer key={d.id} d={d} me={me} onDelete={onDelete} />)}
 
       {shots.map((s) => (
-        <ShotLayer key={s.key} shot={s} me={me} icon={icons.get(s.key)!} />
+        <ShotLayer key={s.key} shot={s} me={me} icon={icons.get(s.key)!} onDelete={onDelete} />
       ))}
 
       {me && (
@@ -208,7 +221,7 @@ export default function ShotMap({ shots, sightings, signs, blinds, me, focus, pi
   );
 }
 
-function ShotLayer({ shot, me, icon }: { shot: ShotView; me: Me; icon: L.DivIcon }) {
+function ShotLayer({ shot, me, icon, onDelete }: { shot: ShotView; me: Me; icon: L.DivIcon; onDelete?: (id: string) => void }) {
   const fix = shot.fix;
   return (
     <>
@@ -232,6 +245,7 @@ function ShotLayer({ shot, me, icon }: { shot: ShotView; me: Me; icon: L.DivIcon
                 Bearing {Math.round(r.bearingTrue)}° true
                 {r.bearingRef === "magnetic" && <> ({Math.round(r.bearingInput)}° magnetic)</>}<br />
                 {r.lat.toFixed(5)}, {r.lon.toFixed(5)}
+                <DelBtn id={r.id} onDelete={onDelete} label={`Delete ${r.name}'s report`} />
               </Popup>
             </CircleMarker>
           </Fragment>
@@ -280,7 +294,7 @@ function deerIcon(d: Sighting) {
 }
 
 /** Deer marker with a small direction arrowhead. Older sightings fade. */
-function SightingLayer({ d, me }: { d: Sighting; me: Me }) {
+function SightingLayer({ d, me, onDelete }: { d: Sighting; me: Me; onDelete?: (id: string) => void }) {
   const st = DEER_STYLE[d.deer];
   const ageH = (Date.now() - d.time) / 3600_000;
   const opacity = ageH < 1 ? 1 : ageH < 3 ? 0.75 : 0.5;
@@ -288,7 +302,6 @@ function SightingLayer({ d, me }: { d: Sighting; me: Me }) {
   return (
     <>
       <Marker position={[d.lat, d.lon]} icon={icon} opacity={opacity}>
-        <Tooltip direction="right" offset={[12, 0]}>{d.name} · {fmtTime(d.time)}</Tooltip>
         <Popup>
           <b>{d.count > 1 ? `${d.count} × ` : ""}{st.label}</b> seen by {d.name}<br />
           {fmtTime(d.time)}<br />
@@ -301,6 +314,7 @@ function SightingLayer({ d, me }: { d: Sighting; me: Me }) {
               {formatDistance(distance(me.lat, me.lon, d.lat, d.lon))} {compassPoint(bearingTo(me.lat, me.lon, d.lat, d.lon))} of you
             </>
           )}
+          <DelBtn id={d.id} onDelete={onDelete} />
         </Popup>
       </Marker>
     </>

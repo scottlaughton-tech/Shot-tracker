@@ -266,7 +266,7 @@ export default function App() {
   }
 
   async function remove(id: string) {
-    if (!confirm("Delete this entry?")) return;
+    if (!confirm("Delete this for everyone in the party? This can't be undone.")) return;
     await fetch(`/api/reports/${encodeURIComponent(id)}`, { method: "DELETE" });
     load();
   }
@@ -328,6 +328,7 @@ export default function App() {
           <ShotMap shots={mapShots} sightings={mapDeer} signs={mapSigns} blinds={mapBlinds} me={me} focus={focus}
             pickStart={pickMode === "heading" ? aimFrom
               : picking ? (picked ?? (me ? { lat: me.lat, lon: me.lon } : null)) : undefined}
+            onDelete={remove}
             aim={pickMode === "heading" && aimFrom && center ? { from: aimFrom, to: center } : undefined}
             onCenter={(lat, lon) => setCenter({ lat, lon })}
             goto={goto}

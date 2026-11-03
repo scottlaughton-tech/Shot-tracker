@@ -343,3 +343,9 @@ p { margin: 0; }
   border-left: 7px solid transparent; border-right: 7px solid transparent; border-bottom: 11px solid var(--c);
   filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 1px 1px rgba(0,0,0,.4));
 }
+
+.popup-actions { margin-top: 10px; padding-top: 8px; border-top: 1px solid #e5e5e5; }
+.popup-del {
+  font: inherit; font-size: 0.85rem; font-weight: 600; color: #c92a2a; background: #fff5f5;
+  border: 1px solid #ffc9c9; border-radius: 8px; padding: 7px 10px; cursor: pointer; min-height: 36px;
+}
