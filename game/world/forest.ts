@@ -5,10 +5,11 @@ import * as THREE from "three";
 import { ISLANDS, sampleGround, type Ground, STAND } from "./layout";
 import { hash2, mulberry32, smoothstep } from "./noise";
 import { barkTexture } from "./foliageTextures";
+import type { Photos } from "./photoTextures";
 import { makeTree, type Species, type TreeModel, type BarkKind } from "./treeGen";
 import {
   bakeAlbedoMaterial, bakeNormalMaterial, barkMaterial, foliageDepthMaterial, foliageMaterial,
-  impostorDepthMaterial, impostorMaterial,
+  impostorDepthMaterial, impostorMaterial, type BarkLook,
 } from "./vegMaterials";
 
 type SpeciesInfo = { h: [number, number]; variants: number };
@@ -44,8 +45,9 @@ function chooseSpecies(r: number, g: Ground, x: number, z: number): Species | nu
   }
   if (wet > 0.3) {
     if (r < 0.5) return "alder";
-    if (r < 0.62) return "tamarack";
-    if (r < 0.7) return "cedar";
+    if (r < 0.62) return "dogwood";
+    if (r < 0.645) return "tamarack";
+    if (r < 0.67) return "cedar";
     return null;
   }
   // field-edge fringe: shrubs and young conifers
@@ -64,10 +66,10 @@ function chooseSpecies(r: number, g: Ground, x: number, z: number): Species | nu
   const conifer = 0.5 + 0.35 * Math.sin(x * 0.011 + 1.3) * Math.cos(z * 0.009 - 0.4);
   if (r < conifer) {
     const q = r / conifer;
-    if (q < 0.4) return "spruce";
-    if (q < 0.65) return "fir";
-    if (q < 0.85) return "whitepine";
-    if (q < 0.93) return "cedar";
+    if (q < 0.42) return "spruce";
+    if (q < 0.68) return "fir";
+    if (q < 0.88) return "whitepine";
+    if (q < 0.985) return "cedar";
     return "tamarack";
   }
   const q = (r - conifer) / (1 - conifer);
@@ -93,9 +95,17 @@ export class Forest {
 
   constructor(private renderer: THREE.WebGLRenderer, private heightAt: (x: number, z: number) => number) {}
 
-  async build(atlas: THREE.Texture, progress: (f: number) => void) {
-    const barks = new Map<BarkKind, THREE.Texture>();
-    for (const k of ["maple", "birch", "pine", "spruce", "oak"] as BarkKind[]) barks.set(k, barkTexture(k));
+  async build(atlas: THREE.Texture, progress: (f: number) => void, photos: Photos | null = null) {
+    // photo bark where we have it (birch stays drawn: its white bark is distinctive enough)
+    const barks = new Map<BarkKind, BarkLook>();
+    const c = (hex: string) => new THREE.Color(hex);
+    for (const k of ["maple", "birch", "pine", "spruce", "oak"] as BarkKind[]) barks.set(k, { map: barkTexture(k), color: c("#ffffff") });
+    if (photos) {
+      barks.set("maple", { map: photos.barkHw, color: c("#b8b4ae") });
+      barks.set("oak", { map: photos.barkHw, color: c("#9a948c") });
+      barks.set("pine", { map: photos.barkPine, normal: photos.barkPineN, color: c("#ffffff") });
+      barks.set("spruce", { map: photos.barkPine, normal: photos.barkPineN, color: c("#a89c94") });
+    }
 
     // 1. models
     const modelIndex = new Map<Species, number[]>();
@@ -143,7 +153,7 @@ export class Forest {
       const edgeK = depth < 10 ? 0.75 + 0.025 * depth : 1;
       const s = (want / this.models[model].height) * edgeK;
       const y = this.heightAt(x, z) - 0.15;
-      const shade = 1 - 0.35 * smoothstep(5, 60, depth); // darker deeper in the bush
+      const shade = 1 - 0.5 * smoothstep(3, 40, depth); // darker deeper in the bush
       this.instances.push({ model, x, y, z, s, rot: hash2(Math.round(x * 7), Math.round(z * 7), 3) * Math.PI * 2, dist: r, azim, shade, depth: inHedge || inSwale ? 0 : depth });
       if (r < 1300 && (sp !== "dogwood" && sp !== "sumac" && sp !== "juniper" && sp !== "alder")) {
         this.trunks.push([x, z, Math.max(0.12, this.models[model].height * s * 0.018)]);
@@ -170,6 +180,26 @@ export class Forest {
         const r = Math.hypot(x, z);
         if (r <= 1150 || r > 1750) continue;
         cell(cx, cz, S2);
+      }
+    // a dense fringe of shrubs and young trees right along the edge of the bush
+    const S3 = 2.3;
+    for (let cz = Math.floor(-1150 / S3); cz < Math.ceil(10 / S3); cz++)
+      for (let cx = Math.floor(-1000 / S3); cx < Math.ceil(1000 / S3); cx++) {
+        const x = (cx + hash2(cx, cz, 31)) * S3, z = (cz + hash2(cx, cz, 32)) * S3;
+        const r = Math.hypot(x, z);
+        if (r > 1100 || r < 30) continue;
+        const azim = Math.atan2(x, -z);
+        if (Math.abs(azim) > ANG) continue;
+        sampleGround(x, z, g);
+        if (g.edge < -6 || g.edge > 0.5 || g.hedge > 0.3 || g.swale > 0.3) continue;
+        if (r < 55 && Math.abs(azim) < 0.95) continue;
+        const h = hash2(cx, cz, 33);
+        const sp: Species = h < 0.3 ? "dogwood" : h < 0.5 ? "sapling" : h < 0.62 ? "alder" : h < 0.72 ? "sumac" : h < 0.8 ? "juniper" : h < 0.9 ? "fir" : "beech";
+        const list = modelIndex.get(sp)!;
+        const model = list[Math.floor(hash2(cx, cz, 34) * list.length)];
+        const info = SPECIES[sp];
+        const want = info.h[0] + (info.h[1] - info.h[0]) * hash2(cx, cz, 35) * (sp === "fir" || sp === "beech" ? 0.6 : 1);
+        this.instances.push({ model, x, y: this.heightAt(x, z) - 0.1, z, s: want / this.models[model].height, rot: hash2(cx, cz, 36) * 6.28, dist: r, azim, shade: 0.95, depth: 0 });
       }
     // islands get a few big pines to stand out
     for (const [ix, iz, rad] of ISLANDS) {
@@ -238,7 +268,7 @@ export class Forest {
   private impCells: { uv: [number, number, number, number]; w: number; h: number; y0: number }[] = [];
 
   /** Render every model once, from the south, into albedo + normal atlases. */
-  private bakeImpostors(atlas: THREE.Texture, barks: Map<BarkKind, THREE.Texture>) {
+  private bakeImpostors(atlas: THREE.Texture, barks: Map<BarkKind, BarkLook>) {
     const W = 2048, H = 2048, CELL_H = 384;
     const mk = (srgb: boolean) => {
       const rt = new THREE.WebGLRenderTarget(W, H, { samples: 4, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter });
@@ -278,7 +308,8 @@ export class Forest {
       rd.clear();
       this.models.forEach((m, k) => {
         const L = layout[k];
-        const bark = new THREE.Mesh(m.barkGeo, pass === "albedo" ? bakeAlbedoMaterial(barks.get(m.bark)!, false) : bakeNormalMaterial(barks.get(m.bark)!, false));
+        const bl = barks.get(m.bark)!;
+        const bark = new THREE.Mesh(m.barkGeo, pass === "albedo" ? bakeAlbedoMaterial(bl.map, false, bl.color) : bakeNormalMaterial(bl.map, false));
         const leaf = new THREE.Mesh(m.leafGeo, pass === "albedo" ? bakeAlbedoMaterial(atlas, true) : bakeNormalMaterial(atlas, true));
         scene.add(bark, leaf);
         const y0 = Math.min(0, L.box.min.y);

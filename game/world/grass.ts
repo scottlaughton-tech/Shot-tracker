@@ -94,14 +94,18 @@ export class Grass {
           }
           const tall = Math.max(g.tall, g.hedge * 0.8, g.swale);
           const height = tall > 0.5 ? 0.38 + 0.36 * h2 : 0.13 + 0.1 * h2 + 0.3 * tall;
-          const width = cell * (1.25 + 0.4 * h1);
+          // far away, short stubble is just ground colour; wide flat cards would line up like bricks
+          if (level >= 2 && height < 0.3) continue;
+          if (level >= 2 && h1 > 0.65) continue; // thinner with distance: the ground colour carries it
+          if (level >= 3 && h2 > 0.5) continue;
+          const width = Math.min(cell * (1.25 + 0.4 * h1), Math.max(0.8, height * 3));
           p.set(x, y, z);
           s.set(width, height * (0.7 + 0.3 * smoothstep(0.35, 0.8, g.open)), width);
           m4.compose(p, q, s);
           // colour: straw / grey-tan / russet, a touch of green in the hay
           const t = hash2(cx, cz, 99);
-          if (tall > 0.5) col.setRGB(0.95 + 0.25 * t, 0.9 + 0.18 * t, 0.85 + 0.1 * h2);
-          else col.setRGB(0.95 + 0.1 * t, 1.0 + 0.12 * h2, 0.8 + 0.1 * t);
+          if (tall > 0.5) col.setRGB(0.98 + 0.14 * t, 0.94 + 0.1 * t, 0.86 + 0.06 * h2);
+          else col.setRGB(0.95 + 0.08 * t, 1.0 + 0.08 * h2, 0.82 + 0.06 * t);
           this.grass.mesh.setMatrixAt(this.grass.n, m4); this.grass.mesh.setColorAt(this.grass.n, col); this.grass.n++;
           // goldenrod patches in the old field
           if (tall > 0.5 && this.rod.n < 3000) {

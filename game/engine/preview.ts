@@ -39,7 +39,7 @@ export function mountPreview(el: HTMLElement, what: string) {
     let x = -48;
     for (const sp of list) {
       const m = makeTree(sp, 7919 * (list.indexOf(sp) + 1), heights[sp]);
-      if (!barks.has(m.bark)) barks.set(m.bark, barkMaterial(barkTexture(m.bark)));
+      if (!barks.has(m.bark)) barks.set(m.bark, barkMaterial({ map: barkTexture(m.bark), color: new THREE.Color(1, 1, 1) }));
       const b = new THREE.Mesh(m.barkGeo, barks.get(m.bark)!);
       const l = new THREE.Mesh(m.leafGeo, leaf);
       for (const o of [b, l]) { o.position.x = x; o.castShadow = true; o.receiveShadow = true; scene.add(o); }

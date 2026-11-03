@@ -256,18 +256,18 @@ export function foliageAtlas(): THREE.Texture {
     [Card.Fir]: (g, r) => drawSpray(g, r, S, [40, 66, 40], [80, 110, 64], 19, 0.9),
     [Card.WhitePine]: (g, r) => drawPineTuft(g, r, S),
     [Card.Cedar]: (g, r) => drawCedar(g, r, S),
-    [Card.Tamarack]: (g, r) => drawSpray(g, r, S, [176, 138, 58], [206, 170, 80], 12, 0.75),
+    [Card.Tamarack]: (g, r) => drawSpray(g, r, S, [150, 120, 62], [178, 146, 80], 12, 0.75),
     [Card.TwigMaple]: (g, r) => { drawTwigs(g, r, S, [132, 122, 112], 9, 6, 0.5); drawTwigs(g, r, S, [120, 110, 102], 6, 5, 0.65); },
     [Card.TwigFine]: (g, r) => { drawTwigs(g, r, S, [100, 70, 62], 6, 6, 0.45); drawTwigs(g, r, S, [92, 66, 58], 5, 5, 0.6); },
     [Card.Oak]: (g, r) => drawTwigs(g, r, S, [76, 64, 54], 6, 3, 0.65, (x, y, a) => {
       for (let i = 0; i < 6; i++) {
         const shade = r();
-        const col = shade < 0.4 ? [120, 74, 40] : shade < 0.8 ? [142, 96, 54] : [96, 58, 32];
+        const col = shade < 0.4 ? [112, 80, 56] : shade < 0.8 ? [128, 95, 64] : [90, 64, 44];
         lobedLeaf(g, r, x, y, a + (i - 2.5) * 0.5, 34 + r() * 22, jitter(r, col as [number, number, number], 0.2), 7);
       }
     }),
     [Card.Beech]: (g, r) => drawTwigs(g, r, S, [110, 100, 90], 5, 4, 0.5, (x, y, a) => {
-      for (let i = 0; i < 4; i++) lobedLeaf(g, r, x, y, a + (i - 1.5) * 0.7, 30 + r() * 16, jitter(r, [196, 156, 96], 0.18), 10);
+      for (let i = 0; i < 4; i++) lobedLeaf(g, r, x, y, a + (i - 1.5) * 0.7, 30 + r() * 16, jitter(r, [178, 148, 106], 0.18), 10);
     }),
     [Card.Dogwood]: (g, r) => drawStems(g, r, S, [128, 44, 40], 14),
     [Card.Alder]: (g, r) => drawStems(g, r, S, [84, 76, 70], 12, [96, 70, 50]),

@@ -48,7 +48,7 @@ class Builder {
         const dx = nrm.x * cx + bin.x * sx, dy = nrm.y * cx + bin.y * sx, dz = nrm.z * cx + bin.z * sx;
         this.bp.push(pts[i].x + dx * radii[i], pts[i].y + dy * radii[i], pts[i].z + dz * radii[i]);
         this.bn.push(dx, dy, dz);
-        this.bu.push((s / sides) * uScale, along / (Math.PI * 2 * Math.max(0.05, radii[0])) * 0.5);
+        this.bu.push((s / sides) * uScale, (along / (Math.PI * 2 * Math.max(0.05, radii[0]))) * uScale);
       }
     }
     for (let i = 0; i < pts.length - 1; i++) {
@@ -225,15 +225,15 @@ function whitePine(b: Builder, rnd: () => number, h: number) {
       const pts = wobblyLine(rnd, at, end, 4, len * 0.08, -len * 0.08);
       b.tube(pts, pts.map((_, i) => trunkR * 0.35 * (1 - i / pts.length) + 0.015), 5);
       // tufts along the outer half of the branch, facing up
-      for (let q = 0; q < 6; q++) {
-        const tt = 0.35 + q * 0.12 + rnd() * 0.05;
+      for (let q = 0; q < 9; q++) {
+        const tt = 0.3 + q * 0.085 + rnd() * 0.05;
         const p = pts[Math.min(pts.length - 1, Math.floor(tt * (pts.length - 1)))].clone().lerp(end, tt * 0.3);
         const dir = out.clone().applyAxisAngle(UP, (rnd() - 0.5) * 1.6).add(v(0, 0.15, 0)).normalize();
         const n = out.clone().multiplyScalar(0.5).add(v(0, 0.85, 0)).normalize();
         const roll = rnd() * Math.PI;
         for (let c = 0; c < 2; c++) {
           const side = new THREE.Vector3().crossVectors(dir, UP).normalize().applyAxisAngle(dir, roll + c * Math.PI / 2);
-          b.card(Card.WhitePine, p, dir, side, h * 0.1 * (0.8 + rnd() * 0.5), h * 0.085, n, 0.75 + rnd() * 0.25, 0.7);
+          b.card(Card.WhitePine, p, dir, side, h * 0.085 * (0.8 + rnd() * 0.5), h * 0.075, n, 0.6 + rnd() * 0.35, 0.7);
         }
       }
     }
@@ -315,7 +315,7 @@ export function makeClump(card: Card, cards = 3, seed = 1): THREE.BufferGeometry
     const side = v(Math.cos(a), 0, Math.sin(a));
     const n = v(-Math.sin(a) * 0.35, 1, Math.cos(a) * 0.35).normalize();
     const lean = v((rnd() - 0.5) * 0.15, 1, (rnd() - 0.5) * 0.15).normalize();
-    b.upCard(card, v((rnd() - 0.5) * 0.2, -0.04, (rnd() - 0.5) * 0.2), lean, side, 1, 1, n, 1, 1, 0.45);
+    b.upCard(card, v((rnd() - 0.5) * 0.2, -0.04, (rnd() - 0.5) * 0.2), lean, side, 1, 1, n, 1, 1, 0.62);
   }
   return b.build().leaf;
 }
@@ -336,7 +336,7 @@ export function makeTree(species: Species, seed: number, height: number): TreeMo
       conifer(b, rnd, height, { card: Card.Cedar, widthRatio: 0.19, droop: 0.2, layers: 24, perLayer: 8, bark: 1.3, cardW: 1.1, spire: 0.7, core: true });
       bark = "pine"; radius = height * 0.19; break;
     case "tamarack":
-      conifer(b, rnd, height, { card: Card.Tamarack, widthRatio: 0.18, droop: -0.05, layers: 20, perLayer: 6, bark: 1, cardW: 0.8, spire: 1.0 });
+      conifer(b, rnd, height, { card: Card.Tamarack, widthRatio: 0.18, droop: -0.05, layers: 22, perLayer: 6, bark: 1, cardW: 0.85, spire: 1.0, core: true });
       bark = "pine"; radius = height * 0.18; break;
     case "sapling":
       conifer(b, rnd, height, { card: Card.Sapling, widthRatio: 0.26, droop: 0.2, layers: 10, perLayer: 6, bark: 1.2, cardW: 1.05, spire: 0.9, core: true });

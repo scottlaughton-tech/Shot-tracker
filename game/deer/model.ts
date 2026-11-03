@@ -19,13 +19,13 @@ type C = [number, number, number];
 const mix = (a: C, b: C, t: number): C => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 
 // November "grey coat" palette (sRGB)
-const COAT: C = [0.39, 0.33, 0.265];
-const BACK: C = [0.27, 0.22, 0.17];
-const LOWER: C = [0.47, 0.39, 0.3];
+const COAT: C = [0.34, 0.295, 0.25];
+const BACK: C = [0.225, 0.19, 0.16];
+const LOWER: C = [0.43, 0.365, 0.29];
 const WHITE: C = [0.84, 0.82, 0.78];
 const BLACK: C = [0.06, 0.05, 0.045];
 const FACE: C = [0.26, 0.2, 0.15];
-const TAN: C = [0.5, 0.37, 0.25];
+const TAN: C = [0.46, 0.35, 0.245];
 const LEGDARK: C = [0.33, 0.25, 0.18];
 const HOOF: C = [0.14, 0.12, 0.11];
 const TARSAL: C = [0.16, 0.11, 0.08];
@@ -84,8 +84,10 @@ function coat(p: Vec, n: Vec, tag: string): C {
     }
     case "tail": {
       // hanging tail: brown on the outside, white fringe; white underneath shows when it's raised
+      // brown on top with a thin white fringe; white underneath (shows when it's raised)
       c = mix(TAILTOP, BACK, ss(0.015, 0, Math.abs(x)) * 0.5);
-      c = mix(c, WHITE, ss(0.028, 0.04, Math.abs(x)) + ss(-0.2, 0.4, n[2]) * 0.9);
+      const under = ss(-0.1, -0.5, n[1]) * ss(-0.2, 0.3, n[2]);
+      c = mix(c, WHITE, Math.min(1, ss(0.034, 0.042, Math.abs(x)) * 0.8 + under));
       break;
     }
     case "leg": case "hoof": {
@@ -186,7 +188,7 @@ function furMaterial(noise: THREE.Texture | null): THREE.MeshPhysicalMaterial {
   float b = texture2D(uFurNoise, vec2(vBindPos.z * 9.0, vBindPos.x * 55.0)).g;
   float c = texture2D(uFurNoise, vec2(vBindPos.x * 30.0, vBindPos.y * 30.0)).b;
   float n = a * w.x + b * w.y + c * w.z;
-  diffuseColor.rgb *= 0.86 + 0.28 * n;
+  diffuseColor.rgb *= 0.78 + 0.42 * n;
 }`);
     };
   }
@@ -219,7 +221,14 @@ export function buildDeerAsset(noise: THREE.Texture | null): DeerAsset {
     order.forEach((bi, k) => { skinIndex[v * 4 + k] = bi; skinWeight[v * 4 + k] = acc[bi] / sum; });
     const n: Vec = [raw.normals[v * 3], raw.normals[v * 3 + 1], raw.normals[v * 3 + 2]];
     const c = coat([x, y, z], n, bestTag);
-    tmp.setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace);
+    // ambient occlusion from the shape itself: creases, the belly, inside the legs
+    let occ = 0;
+    for (let i = 1; i <= 5; i++) {
+      const d = 0.018 * i;
+      occ += (d - field.dist(x + n[0] * d, y + n[1] * d, z + n[2] * d)) / Math.pow(2, i);
+    }
+    const ao = Math.max(0.42, Math.min(1, 1 - occ * 9)) * (0.82 + 0.18 * ss(-0.8, 0.6, n[1]));
+    tmp.setRGB(c[0] * ao, c[1] * ao, c[2] * ao, THREE.SRGBColorSpace);
     colors[v * 3] = tmp.r; colors[v * 3 + 1] = tmp.g; colors[v * 3 + 2] = tmp.b;
   }
   const geo = new THREE.BufferGeometry();

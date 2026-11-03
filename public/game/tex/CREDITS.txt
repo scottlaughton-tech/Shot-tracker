@@ -1,0 +1,10 @@
+Photo textures used by the Last Light game. All are CC0 (public domain) from Poly Haven
+(https://polyhaven.com), resized and recompressed. No attribution is required; credited anyway.
+
+floor.jpg, floor_n.jpg     forest_leaves_02        (Poly Haven)
+field.jpg                  leafy_grass             (Poly Haven)
+ground.jpg, ground_n.jpg   forrest_ground_01       (Poly Haven)
+bark_hw.jpg                bark_brown_02           (Poly Haven)
+bark_pine.jpg, _n          pine_bark               (Poly Haven)
+rock.jpg                   rock_boulder_dry        (Poly Haven)
+rock_n.jpg                 rock_face_03 (normal)   (Poly Haven)

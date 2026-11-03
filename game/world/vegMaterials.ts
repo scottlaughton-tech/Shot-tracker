@@ -49,8 +49,12 @@ export function foliageDepthMaterial(atlas: THREE.Texture): THREE.MeshDepthMater
   return m;
 }
 
-export function barkMaterial(tex: THREE.Texture): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95, metalness: 0 });
+export type BarkLook = { map: THREE.Texture; normal?: THREE.Texture; color: THREE.Color };
+
+export function barkMaterial(b: BarkLook): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({
+    map: b.map, normalMap: b.normal ?? null, normalScale: new THREE.Vector2(1.2, 1.2), color: b.color, roughness: 0.95, metalness: 0,
+  });
 }
 
 // ---------- impostors ----------
@@ -124,8 +128,8 @@ gl_Position = projectionMatrix * mvPosition;`);
 }
 
 /** Bake helpers: unlit albedo, and view-space normals. */
-export function bakeAlbedoMaterial(map: THREE.Texture, cards: boolean): THREE.Material {
-  return new THREE.MeshBasicMaterial({ map, vertexColors: cards, alphaTest: cards ? 0.42 : 0, side: cards ? THREE.DoubleSide : THREE.FrontSide });
+export function bakeAlbedoMaterial(map: THREE.Texture, cards: boolean, color = new THREE.Color(1, 1, 1)): THREE.Material {
+  return new THREE.MeshBasicMaterial({ map, color, vertexColors: cards, alphaTest: cards ? 0.42 : 0, side: cards ? THREE.DoubleSide : THREE.FrontSide });
 }
 
 export function bakeNormalMaterial(map: THREE.Texture, cards: boolean): THREE.ShaderMaterial {

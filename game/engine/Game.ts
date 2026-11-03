@@ -13,6 +13,8 @@ import { Forest } from "../world/forest";
 import { Grass } from "../world/grass";
 import { foliageAtlas } from "../world/foliageTextures";
 import { wind } from "../world/vegMaterials";
+import { loadPhotos, type Photos } from "../world/photoTextures";
+import { Rocks } from "../world/rocks";
 import { dropTable, LOAD_308, stepBullet, zeroAngle, type BulletState } from "../ballistics";
 import { buildDeerAsset, type DeerAsset } from "../deer/model";
 import type { Deer } from "../deer/Deer";
@@ -65,6 +67,8 @@ export class Game {
   targets: Target[] = [];
   forest!: Forest;
   grass!: Grass;
+  rocks!: Rocks;
+  photos: Photos | null = null;
   deerAsset!: DeerAsset;
   hunt: Hunt | null = null;
   private vegView = { yaw: 99, pitch: 99, fov: 0, scoped: false };
@@ -96,8 +100,10 @@ export class Game {
   constructor(private canvas: HTMLCanvasElement, overlay: HTMLCanvasElement, private events: GameEvents) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.AgXToneMapping;
-    this.renderer.toneMappingExposure = 1.0;
+    // tone mapping (?tm=aces|agx|neutral to compare while tuning)
+    const tm = new URLSearchParams(location.search).get("tm");
+    this.renderer.toneMapping = tm === "agx" ? THREE.AgXToneMapping : tm === "neutral" ? THREE.NeutralToneMapping : THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = Number(new URLSearchParams(location.search).get("exp")) || (tm === "agx" ? 1.0 : 0.85);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.autoClear = false;
@@ -111,9 +117,11 @@ export class Game {
     const step = async (f: number, label: string) => { onProgress(f, label); await new Promise((r) => setTimeout(r, 0)); };
     await step(0.05, "Sky");
     this.sky = buildSky(this.scene, { azimuth: 222, elevation: 13 });
-    await step(0.15, "Ground");
+    await step(0.08, "Textures");
+    this.photos = await loadPhotos(this.renderer.capabilities.getMaxAnisotropy(), (d, n) => onProgress(0.08 + 0.1 * (d / n), "Textures"));
+    await step(0.18, "Ground");
     const noise = noiseTexture(256);
-    this.terrain = buildTerrain(groundMaterial(noise));
+    this.terrain = buildTerrain(groundMaterial(noise, this.photos));
     this.scene.add(this.terrain.mesh);
     this.eye.y = this.terrain.heightAt(STAND.x, STAND.z) + STAND.eye;
     this.wideCam.position.copy(this.eye);
@@ -121,10 +129,12 @@ export class Game {
     await step(0.25, "Trees");
     const atlas = foliageAtlas();
     this.forest = new Forest(this.renderer, this.terrain.heightAt);
-    await this.forest.build(atlas, (f) => onProgress(0.25 + f * 0.65, "Trees"));
+    await this.forest.build(atlas, (f) => onProgress(0.25 + f * 0.65, "Trees"), this.photos);
     this.scene.add(this.forest.group);
     this.grass = new Grass(atlas, this.terrain.heightAt);
     this.scene.add(this.grass.group);
+    this.rocks = new Rocks(this.terrain.heightAt, this.photos);
+    this.scene.add(this.rocks.group);
     console.log(`[g] forest: ${this.forest.count} trees, ${this.forest.models.length} models`);
     await step(0.92, "Deer");
     this.deerAsset = buildDeerAsset(noise);
@@ -361,6 +371,15 @@ export class Game {
     }
   }
 
+  /** Testing only: look through the scope in a given direction (degrees). */
+  debugView(yawDeg: number, pitchDeg: number, zoom: number) {
+    this.scoped = true;
+    this.scopeCx = this.w / 2; this.scopeCy = this.h / 2;
+    this.aimYaw = THREE.MathUtils.degToRad(yawDeg);
+    this.aimPitch = THREE.MathUtils.degToRad(pitchDeg);
+    this.setZoom(zoom);
+  }
+
   /** Testing only: run the simulation forward without drawing. */
   debugAdvance(seconds: number) {
     const dt = 1 / 30;
@@ -445,6 +464,7 @@ export class Game {
     Object.assign(v, { yaw, pitch, fov: fovDeg, scoped: this.scoped });
     const margin = this.scoped ? 1.45 : 1.1;
     this.forest.update(yaw, (fov / 2) * margin + 0.002, mag);
+    this.rocks.update(yaw, (fov / 2) * margin + 0.002, mag);
     // ground distances visible at the bottom and top of the view
     let rMin: number, rMax: number;
     if (this.scoped) {
