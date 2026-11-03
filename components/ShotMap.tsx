@@ -151,7 +151,7 @@ export default function ShotMap({ shots, sightings, signs, blinds, me, focus, pi
 
       {blinds.map((x) => (
         <Marker key={x.id} position={[x.lat, x.lon]} icon={blindIcon} zIndexOffset={-100}>
-          <Tooltip permanent direction="right" offset={[10, 0]} className="blind-label">{x.title}</Tooltip>
+          <Tooltip permanent direction="right" offset={[10, 0]} className="blind-label">{x.name}</Tooltip>
           <Popup>
             <b>{x.title}</b> · {BLIND_STYLE[x.blind].label}<br />
             Added by {x.name}
