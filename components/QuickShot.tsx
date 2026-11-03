@@ -84,57 +84,47 @@ export default function QuickShot({ me, tappedAt, compass, onManual, onClose, on
   const ready = !!loc && heading != null && !!name.trim() && !busy;
 
   return (
+    // Overlay on top of the map: the map stays visible (and movable) between the top card and bottom bar.
     <div className="qs">
-      <div className="qs-top">
-        <span>🔊 Shot heard at <b>{heardAt}</b></span>
-        <button className="qs-x" onClick={onClose} aria-label="Cancel">✕</button>
-      </div>
-
-      {askName && (
-        <label className="qs-name">
-          Your first name
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Scott" maxLength={40} autoComplete="given-name" />
-        </label>
-      )}
-
-      <p className="qs-instr">Point the <b>top of your phone</b> toward the shot</p>
-
-      {compassProblem ? (
-        <div className="qs-problem">
-          <p>{compassProblem}</p>
-          <button className="btn primary big" onClick={onManual}>Enter manually</button>
+      <div className="qs-card">
+        <div className="row between">
+          <span className="qs-when">🔊 Shot heard at <b>{heardAt}</b></span>
+          <button className="qs-x" onClick={onClose} aria-label="Cancel">✕</button>
         </div>
-      ) : (
-        <>
-          <div className="qs-dial" aria-hidden>
-            <div className="qs-rose" style={{ transform: `rotate(${-(trueH ?? 0)}deg)` }}>
-              <span className="n">N</span><span className="e">E</span><span className="s">S</span><span className="w">W</span>
+        {askName && (
+          <input className="qs-name" value={name} onChange={(e) => setName(e.target.value)}
+            placeholder="Your first name" maxLength={40} autoComplete="given-name" aria-label="Your first name" />
+        )}
+        {compassProblem ? (
+          <p className="qs-problem">{compassProblem} Use <b>Enter manually</b> below.</p>
+        ) : (
+          <div className="qs-live">
+            <div className="qs-mini" aria-hidden>
+              <div className="qs-needle" style={{ transform: `rotate(${-(trueH ?? 0)}deg)` }}><span /></div>
             </div>
-            <div className="qs-pointer" />
+            <div>
+              <div className="qs-deg" aria-live="polite">
+                {trueH == null ? "…" : <>{Math.round(trueH)}° <span>{compassPoint(trueH)}</span></>}
+              </div>
+              <div className="qs-instr">Point the <b>top of your phone</b> toward the shot</div>
+            </div>
           </div>
-          <div className="qs-readout" aria-live="polite">
-            {trueH == null ? "…" : `${Math.round(trueH)}°`}
-            <small>{trueH == null ? "Waiting for compass" : compassPoint(trueH)}</small>
-          </div>
-          <p className="qs-hint">
-            Hold the phone flat, away from your rifle.
-            {needsCalibration && <b> Compass needs calibrating: wave the phone in a figure 8.</b>}
-          </p>
-        </>
-      )}
-
-      <div className="qs-gps">
-        {loc ? <>📍 GPS ±{Math.round(loc.accuracy)} m</> : <>📍 {gpsMsg || "Getting your GPS location…"}</>}
+        )}
+        {needsCalibration && !compassProblem && <p className="qs-cal">Compass needs calibrating: wave the phone in a figure 8.</p>}
       </div>
 
-      {error && <p className="qs-error">{error}</p>}
-
-      {!compassProblem && (
-        <button className="qs-register" disabled={!ready} onClick={register}>
-          {busy ? "Sending…" : "REGISTER SHOT"}
-        </button>
-      )}
-      <button className="qs-manual" onClick={onManual}>Enter manually</button>
+      <div className="qs-bottom">
+        <div className="qs-gps">
+          {loc ? <>📍 GPS ±{Math.round(loc.accuracy)} m · hold the phone flat, away from your rifle</> : <>📍 {gpsMsg || "Getting your GPS location…"}</>}
+        </div>
+        {error && <p className="qs-error">{error}</p>}
+        {!compassProblem && (
+          <button className="qs-register" disabled={!ready} onClick={register}>
+            {busy ? "Sending…" : "REGISTER SHOT"}
+          </button>
+        )}
+        <button className="qs-manual" onClick={onManual}>Enter manually</button>
+      </div>
     </div>
   );
 }

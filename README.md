@@ -30,7 +30,8 @@ Until steps 2–4 are done, the site shows a warning (no passcode, or reports ar
 ## Using it in the field
 
 - Tap **🔊 Heard a shot** right away. The time is recorded at that moment.
-  A compass screen opens: **point the top of your phone toward the shot** and tap **REGISTER SHOT**.
+  The map stays visible with a red line from you in the direction your phone points, plus the bearing
+  at the top: **point the top of your phone toward the shot** and tap **REGISTER SHOT**.
   Your GPS position and the compass bearing are sent together. (On iPhone, tap **Allow** the first
   time it asks for compass access.) **Enter manually** opens the full step-by-step form instead.
 - **Blue dot:** your position, with a cone showing which way the top of your phone is pointing.

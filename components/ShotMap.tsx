@@ -91,13 +91,13 @@ function PickMode({ start, onCenter }: { start: { lat: number; lon: number } | n
 }
 
 /** Flies to a spot when `goto.n` changes (used by the "My location" button). */
-function GoTo({ goto }: { goto: { lat: number; lon: number; n: number } | null }) {
+function GoTo({ goto }: { goto: { lat: number; lon: number; n: number; zoom?: number } | null }) {
   const map = useMap();
   const last = useRef(0);
   useEffect(() => {
     if (!goto || goto.n === last.current) return;
     last.current = goto.n;
-    map.flyTo([goto.lat, goto.lon], Math.max(map.getZoom(), 16), { duration: 0.8 });
+    map.flyTo([goto.lat, goto.lon], goto.zoom ?? Math.max(map.getZoom(), 16), { duration: 0.8 });
   }, [goto, map]);
   return null;
 }
@@ -131,12 +131,14 @@ function DelBtn({ id, onDelete, label = "Delete" }: { id: string; onDelete?: (id
   );
 }
 
-export default function ShotMap({ shots, sightings, signs, blinds, me, focus, pickStart, onCenter, goto, ruler, onRulerAdd, aim, onDelete }: {
+export default function ShotMap({ shots, sightings, signs, blinds, me, focus, pickStart, onCenter, goto, ruler, onRulerAdd, aim, onDelete, liveBearing }: {
   shots: ShotView[]; sightings: Sighting[]; signs: Sign[]; blinds: Blind[]; me: Me; focus: { key: string; n: number } | null;
   /** set (even to null) while the crosshair is open */
   pickStart?: { lat: number; lon: number } | null;
   onCenter?: (lat: number, lon: number) => void;
-  goto?: { lat: number; lon: number; n: number } | null;
+  goto?: { lat: number; lon: number; n: number; zoom?: number } | null;
+  /** quick shot: draw a live line from you in the direction the phone points */
+  liveBearing?: boolean;
   /** ruler points; undefined = ruler off */
   ruler?: [number, number][];
   onRulerAdd?: (lat: number, lon: number) => void;
@@ -178,6 +180,7 @@ export default function ShotMap({ shots, sightings, signs, blinds, me, focus, pi
 
       {pickStart !== undefined && onCenter && <PickMode start={pickStart} onCenter={onCenter} />}
       <GoTo goto={goto ?? null} />
+      {liveBearing && me && <LiveBearing me={me} />}
       {ruler && onRulerAdd && <RulerMode onAdd={onRulerAdd} />}
       {ruler && ruler.length > 0 && <RulerLine pts={ruler} />}
       {aim && (
@@ -406,5 +409,20 @@ function MeMarker({ me, eventHandlers }: { me: NonNullable<Me>; eventHandlers: L
     <Marker position={[me.lat, me.lon]} icon={meIcon} ref={ref} zIndexOffset={1000} eventHandlers={eventHandlers}>
       <Tooltip direction="top" offset={[0, -10]}>You</Tooltip>
     </Marker>
+  );
+}
+
+/** Quick shot: red line from you along the phone's (true) heading; re-renders on its own as the phone turns. */
+function LiveBearing({ me }: { me: NonNullable<Me> }) {
+  const heading = useHeading();
+  const decl = useMemo(() => declinationAt(me.lat, me.lon), [Math.round(me.lat * 10), Math.round(me.lon * 10)]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (heading == null) return null;
+  const end = destination(me.lat, me.lon, heading + decl, 3000);
+  const pts: [number, number][] = [[me.lat, me.lon], end];
+  return (
+    <>
+      <Polyline positions={pts} interactive={false} pathOptions={{ color: "#fff", weight: 7, opacity: 0.85 }} />
+      <Polyline positions={pts} interactive={false} pathOptions={{ color: "#e03131", weight: 3.5, dashArray: "12 8" }} />
+    </>
   );
 }

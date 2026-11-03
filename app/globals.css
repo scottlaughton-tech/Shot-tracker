@@ -362,46 +362,45 @@ p { margin: 0; }
   filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.45));
 }
 
-/* ---------- Quick shot screen ---------- */
+/* ---------- Quick shot (overlay on the map) ---------- */
 .qs {
-  position: fixed; inset: 0; z-index: 3000; background: #10160f; color: #fff;
-  display: flex; flex-direction: column; align-items: center; gap: 14px;
-  padding: max(14px, env(safe-area-inset-top)) 16px max(18px, env(safe-area-inset-bottom));
-  overflow-y: auto;
+  position: fixed; inset: 0; z-index: 3000; pointer-events: none;
+  display: flex; flex-direction: column; justify-content: space-between;
+  padding: max(10px, env(safe-area-inset-top)) 10px max(12px, env(safe-area-inset-bottom));
 }
-.qs-top { align-self: stretch; display: flex; justify-content: space-between; align-items: center; font-size: 1rem; }
-.qs-x { width: 44px; height: 44px; border-radius: 50%; border: 1px solid #3a4537; background: #1c241b; color: #fff; font-size: 1.1rem; cursor: pointer; }
-.qs-name { align-self: stretch; color: #fff; }
-.qs-name input { background: #1c241b; color: #fff; border-color: #3a4537; }
-.qs-instr { font-size: 1.25rem; text-align: center; margin-top: 4px; }
-.qs-dial { position: relative; width: min(62vw, 260px); aspect-ratio: 1; flex: none; }
-.qs-rose {
-  position: absolute; inset: 0; border-radius: 50%; border: 3px solid #4b5a47;
-  background: radial-gradient(circle, #1c241b 60%, #141b13 61%); transition: transform .12s linear;
+.qs-card, .qs-bottom {
+  pointer-events: auto; background: #10160f; color: #fff; border-radius: 16px;
+  padding: 10px 12px; box-shadow: 0 6px 20px rgba(0,0,0,.4); display: flex; flex-direction: column; gap: 8px;
 }
-.qs-rose span { position: absolute; font-weight: 800; font-size: 1.2rem; color: #b7c4b2; }
-.qs-rose .n { top: 8px; left: 50%; transform: translateX(-50%); color: #ff6b6b; font-size: 1.5rem; }
-.qs-rose .s { bottom: 8px; left: 50%; transform: translateX(-50%); }
-.qs-rose .e { right: 12px; top: 50%; transform: translateY(-50%); }
-.qs-rose .w { left: 12px; top: 50%; transform: translateY(-50%); }
-.qs-pointer {
-  position: absolute; left: 50%; top: -14px; transform: translateX(-50%); width: 0; height: 0;
-  border-left: 14px solid transparent; border-right: 14px solid transparent; border-top: 24px solid #ffd43b;
+.qs-when { font-size: 0.95rem; }
+.qs-x { width: 40px; height: 40px; border-radius: 50%; border: 1px solid #3a4537; background: #1c241b; color: #fff; font-size: 1rem; cursor: pointer; flex: none; }
+.qs-name { background: #1c241b; color: #fff; border-color: #4b5a47; }
+.qs-live { display: flex; align-items: center; gap: 12px; }
+.qs-mini {
+  width: 54px; height: 54px; flex: none; border-radius: 50%; border: 2px solid #4b5a47; background: #1c241b; position: relative;
 }
-.qs-readout { font-size: 4.2rem; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; text-align: center; }
-.qs-readout small { display: block; font-size: 1.4rem; font-weight: 700; color: #ffd43b; margin-top: 4px; }
-.qs-hint { color: #b7c4b2; font-size: 0.9rem; text-align: center; }
-.qs-hint b { color: #ffd43b; }
-.qs-gps { color: #b7c4b2; font-size: 0.95rem; }
+.qs-mini::after { /* fixed marker: the top of the phone */
+  content: ""; position: absolute; left: 50%; top: -6px; transform: translateX(-50%);
+  border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 9px solid #ffd43b;
+}
+.qs-needle { position: absolute; inset: 0; transition: transform .12s linear; }
+.qs-needle span { /* red north needle, rotates so it always points to north */
+  position: absolute; left: 50%; top: 6px; width: 0; height: 0; transform: translateX(-50%);
+  border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 20px solid #ff6b6b;
+}
+.qs-deg { font-size: 2.2rem; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+.qs-deg span { font-size: 1.3rem; color: #ffd43b; }
+.qs-instr { font-size: 0.92rem; color: #dfe7db; margin-top: 2px; }
+.qs-cal { color: #ffd43b; font-size: 0.85rem; font-weight: 700; }
+.qs-problem { color: #ffd8a8; font-size: 0.95rem; }
+.qs-gps { color: #b7c4b2; font-size: 0.82rem; text-align: center; }
 .qs-error { color: #ff8787; font-weight: 700; text-align: center; }
-.qs-problem { text-align: center; display: flex; flex-direction: column; gap: 14px; align-items: center; margin: 20px 0; font-size: 1.05rem; }
 .qs-register {
-  align-self: stretch; margin-top: auto; min-height: 76px; border: 0; border-radius: 16px; cursor: pointer;
-  background: #2b8a3e; color: #fff; font: inherit; font-size: 1.6rem; font-weight: 900; letter-spacing: .04em;
-  box-shadow: 0 6px 18px rgba(0,0,0,.4);
+  min-height: 64px; border: 0; border-radius: 14px; cursor: pointer;
+  background: #2b8a3e; color: #fff; font: inherit; font-size: 1.5rem; font-weight: 900; letter-spacing: .04em;
 }
-.qs-register:disabled { background: #2f3a2d; color: #7f8c7b; box-shadow: none; }
+.qs-register:disabled { background: #2f3a2d; color: #7f8c7b; }
 .qs-manual {
-  align-self: stretch; min-height: 50px; border-radius: 12px; border: 1px solid #3a4537; background: transparent;
-  color: #fff; font: inherit; font-size: 1.05rem; font-weight: 600; cursor: pointer;
+  min-height: 44px; border-radius: 12px; border: 1px solid #3a4537; background: transparent;
+  color: #fff; font: inherit; font-size: 1rem; font-weight: 600; cursor: pointer;
 }

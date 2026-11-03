@@ -49,6 +49,9 @@ export default function App() {
   function heardShot() {
     // startCompass() must run inside the tap so iPhone can ask for compass permission
     setQuick({ tappedAt: Date.now(), compass: startCompass() });
+    setPanelOpen(false);
+    // centre on you, zoomed out enough to see where the bearing line goes
+    if (me) setGoto((g) => ({ lat: me.lat, lon: me.lon, n: (g?.n ?? 0) + 1, zoom: 14 }));
   }
 
   // Compass arrow on the blue dot: Android needs no permission, so start right away.
@@ -73,7 +76,7 @@ export default function App() {
     setFormStartedAt(startedAt); setPicked(null); setPickedHeading(null); setPicking(false); setRuler(null); setFormKind(k); }
 
   // "My location" button
-  const [goto, setGoto] = useState<{ lat: number; lon: number; n: number } | null>(null);
+  const [goto, setGoto] = useState<{ lat: number; lon: number; n: number; zoom?: number } | null>(null);
   const [locating, setLocating] = useState(false);
   function locateMe() {
     void startCompass(); // also turns on the direction arrow (asks on iPhone)
@@ -345,7 +348,7 @@ export default function App() {
 
       <div className="main">
         <div className="map-wrap">
-          {!picking && !ruler && <button className="blind-fab" onClick={() => openForm("blind")}>🟧 Add blind</button>}
+          {!picking && !ruler && !quick && <button className="blind-fab" onClick={() => openForm("blind")}>🟧 Add blind</button>}
           <ShotMap shots={mapShots} sightings={mapDeer} signs={mapSigns} blinds={mapBlinds} me={me} focus={focus}
             pickStart={pickMode === "heading" ? aimFrom
               : picking ? (picked ?? (me ? { lat: me.lat, lon: me.lon } : null)) : undefined}
@@ -353,9 +356,10 @@ export default function App() {
             aim={pickMode === "heading" && aimFrom && center ? { from: aimFrom, to: center } : undefined}
             onCenter={(lat, lon) => setCenter({ lat, lon })}
             goto={goto}
+            liveBearing={!!quick}
             ruler={ruler ?? undefined}
             onRulerAdd={(lat, lon) => setRuler((r) => (r ? [...r, [lat, lon]] : r))} />
-          {!picking && (
+          {!picking && !quick && (
             <div className="map-tools">
               <button className={`tool ${locating ? "busy" : ""}`} onClick={locateMe} aria-label="Show my location" title="My location">
                 {locating ? "…" : "📍"}
@@ -454,7 +458,7 @@ export default function App() {
         </aside>
       </div>
 
-      {toast && !picking && (
+      {toast && !picking && !quick && (
         <button className="toast" style={{ borderLeftColor: toast.color }} onClick={() => {
           if (toast.key) focusOn(toast.key);
           setToast(null);
@@ -465,7 +469,7 @@ export default function App() {
         </button>
       )}
 
-      <div className="fabs" style={picking || ruler ? { display: "none" } : undefined}>
+      <div className="fabs" style={picking || ruler || quick ? { display: "none" } : undefined}>
         <button className="report-fab" onClick={heardShot}>🔊 Heard a shot</button>
         <button className="deer-fab" onClick={() => openForm("deer")} aria-label="Report a deer sighting">🦌 Deer</button>
         <button className="sign-fab" onClick={() => openForm("sign")} aria-label="Mark deer sign">🍂 Sign</button>
