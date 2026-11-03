@@ -6,6 +6,7 @@ import { colorFor, DEER_STYLE, deerText, SIGN_COLOR, SIGN_STYLE, BLIND_COLOR, BL
 import { beep, unlockAudio, vibrate } from "@/lib/alert";
 import { ago } from "@/lib/time";
 import QuickShot from "./QuickShot";
+import HelpSheet from "./HelpSheet";
 import { listenCompass, needsPermission, previouslyGranted, startCompass } from "@/lib/compass";
 import ReportForm, { type Picked, type PickKind, type ReportKind } from "./ReportForm";
 import ShotList, { type LayerKey, type Layers } from "./ShotList";
@@ -43,6 +44,7 @@ export default function App() {
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [me, setMe] = useState<Me>(null);
   const [formKind, setFormKind] = useState<ReportKind | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [formStartedAt, setFormStartedAt] = useState<number | undefined>(undefined);
   // Quick shot screen: opened by "Heard a shot"
   const [quick, setQuick] = useState<{ tappedAt: number; compass: Promise<"ok" | "denied" | "unsupported"> } | null>(null);
@@ -322,7 +324,10 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <strong>🦌<span className="hide-sm"> Shot Tracker</span></strong>
+        <div className="brand">
+          <strong>🦌<span className="hide-sm"> Shot Tracker</span></strong>
+          <button className="info-btn" onClick={() => setHelpOpen(true)} aria-label="How to use this app" title="How to use this app">i</button>
+        </div>
         <label className="interval">
           <span className="hide-sm">Same shot if within</span>
           <span className="show-sm">Group</span>
@@ -474,6 +479,8 @@ export default function App() {
         <button className="deer-fab" onClick={() => openForm("deer")} aria-label="Report a deer sighting">🦌 Deer</button>
         <button className="sign-fab" onClick={() => openForm("sign")} aria-label="Mark deer sign">🍂 Sign</button>
       </div>
+
+      {helpOpen && <HelpSheet onClose={() => setHelpOpen(false)} />}
 
       {quick && (
         <QuickShot
