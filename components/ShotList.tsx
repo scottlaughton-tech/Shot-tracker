@@ -1,6 +1,8 @@
 "use client";
 import { useState } from "react";
-import { bearingTo, compassPoint, distance, formatDistance } from "@/lib/geo";
+import { bearingTo, compassPoint, distance, formatDistance, type Sighting } from "@/lib/geo";
+import { DEER_STYLE } from "@/lib/colors";
+import { ago } from "@/lib/time";
 import type { Me, ShotView } from "./App";
 
 const fmtTime = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
@@ -18,6 +20,13 @@ type Props = {
   onDelete: (id: string) => void;
   onClearAll: () => void;
   onClose: () => void;
+  sightings: Sighting[];
+  totalSightings: number;
+  showDeer: boolean;
+  onShowDeer: (v: boolean) => void;
+  deerRange: "today" | "all";
+  onDeerRange: (v: "today" | "all") => void;
+  onClearDeer: () => void;
 };
 
 export default function ShotList(p: Props) {
@@ -97,7 +106,45 @@ export default function ShotList(p: Props) {
       })}
 
       {p.shots.length > 0 && (
-        <button className="btn small danger clear-all" onClick={p.onClearAll}>Clear all reports</button>
+        <button className="btn small danger clear-all" onClick={p.onClearAll}>Clear all shot reports</button>
+      )}
+
+      <div className="row between section-title">
+        <h2>🦌 Deer sightings</h2>
+        <label className="row gap" style={{ flexDirection: "row", fontWeight: 500 }}>
+          <input type="checkbox" checked={p.showDeer} onChange={(e) => p.onShowDeer(e.target.checked)} style={{ width: 20, height: 20 }} />
+          On map
+        </label>
+      </div>
+      <div className="tabs small">
+        <button type="button" className={p.deerRange === "today" ? "on" : ""} onClick={() => p.onDeerRange("today")}>Today</button>
+        <button type="button" className={p.deerRange === "all" ? "on" : ""} onClick={() => p.onDeerRange("all")}>All ({p.totalSightings})</button>
+      </div>
+      {p.sightings.length === 0 && <p className="muted">No deer sightings {p.deerRange === "today" ? "today" : "yet"}.</p>}
+      {p.sightings.map((d) => {
+        const st = DEER_STYLE[d.deer];
+        return (
+          <div key={d.id} className="sighting">
+            <div className="row gap">
+              <span className="deer-dot" style={{ background: st.color }}>{st.letter}</span>
+              <span className="grow">
+                <strong>{d.count > 1 ? `${d.count} × ` : ""}{st.label}</strong>
+                {d.heading == null ? " · not moving" : ` · heading ${compassPoint(d.heading)} (${Math.round(d.heading)}°)`}
+                <br />
+                <span className="muted">{d.name} · {fmtTime(d.time)} ({ago(d.time)})</span>
+                {p.me && <span className="muted"> · {formatDistance(distance(p.me.lat, p.me.lon, d.lat, d.lon))} {compassPoint(bearingTo(p.me.lat, p.me.lon, d.lat, d.lon))} of you</span>}
+                {d.note && <><br />“{d.note}”</>}
+              </span>
+            </div>
+            <div className="row gap" style={{ justifyContent: "flex-end", marginTop: 6 }}>
+              <button className="btn small" onClick={() => p.onFocus(d.id)}>Zoom</button>
+              <button className="btn small danger" onClick={() => p.onDelete(d.id)}>Delete</button>
+            </div>
+          </div>
+        );
+      })}
+      {p.totalSightings > 0 && (
+        <button className="btn small danger clear-all" onClick={p.onClearDeer}>Clear all deer sightings</button>
       )}
     </div>
   );

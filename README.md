@@ -36,7 +36,13 @@ Until steps 2–4 are done, the site shows a warning (no passcode, or reports ar
   steel throws off phone compasses.
 - **Type degrees:** use a real compass. Choose **Magnetic** (most compasses) or **True north**.
   Magnetic readings are corrected automatically (around Bancroft ON the correction is about 11° W).
-- **Shots panel:** tick or untick shots to show or hide their lines, *Zoom* to one, or delete
+- **🦌 Deer button:** report a buck, doe or fawn sighting at your location, with how many,
+  which way it's heading (same "Point phone" or "Type" input, or **Not moving**) and an optional note.
+  Sightings show on the map as lettered markers (B, D, F) with dashed arrows. Older sightings fade.
+  In the list panel you can turn them on or off and choose **Today** or **All**.
+- **Alerts:** when someone else reports a shot or a deer, a pop-up appears (Android also vibrates).
+  Tap 🔕 in the top bar to also play a beep.
+- **List panel:** tick or untick shots to show or hide their lines, *Zoom* to one, or delete
   a mistaken report.
 - **Group** (top bar): how many minutes apart reports can be and still count as one shot.
   This setting is shared with the whole party.

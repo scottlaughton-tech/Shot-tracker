@@ -15,6 +15,25 @@ export type Report = {
   createdAt: number; // epoch ms - when the report was submitted
 };
 
+export type DeerType = "buck" | "doe" | "fawn" | "unknown";
+
+export type Sighting = {
+  id: string; // starts with "sight:"
+  name: string;
+  lat: number;
+  lon: number;
+  accuracy: number | null;
+  deer: DeerType;
+  count: number;
+  heading: number | null; // direction of travel, degrees TRUE; null = not moving
+  headingInput: number | null;
+  headingRef: "magnetic" | "true";
+  declination: number;
+  note: string;
+  time: number; // epoch ms - when seen
+  createdAt: number;
+};
+
 const R = 6371000; // Earth radius, metres
 const rad = (d: number) => (d * Math.PI) / 180;
 const deg = (r: number) => (r * 180) / Math.PI;

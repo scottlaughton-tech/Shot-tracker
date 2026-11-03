@@ -5,7 +5,8 @@ import { Fragment, useEffect, useMemo, useRef } from "react";
 import {
   Circle, CircleMarker, LayersControl, MapContainer, Marker, Polygon, Polyline, Popup, TileLayer, Tooltip, useMap,
 } from "react-leaflet";
-import { bearingTo, compassPoint, destination, distance, ellipsePolygon, formatDistance } from "@/lib/geo";
+import { bearingTo, compassPoint, destination, distance, ellipsePolygon, formatDistance, type Sighting } from "@/lib/geo";
+import { DEER_STYLE } from "@/lib/colors";
 import type { Me, ShotView } from "./App";
 
 const DEFAULT_CENTER: [number, number] = [45.0985, -78.3197];
@@ -21,7 +22,7 @@ function estimateIcon(color: string, label: string) {
 }
 
 /** Zooms the map to fit everything once on first data, and when a shot is "Zoomed". */
-function FitBounds({ shots, me, focus }: { shots: ShotView[]; me: Me; focus: { key: string; n: number } | null }) {
+function FitBounds({ shots, sightings, me, focus }: { shots: ShotView[]; sightings: Sighting[]; me: Me; focus: { key: string; n: number } | null }) {
   const map = useMap();
   const didInitial = useRef(false);
   const lastFocus = useRef(0);
@@ -37,6 +38,11 @@ function FitBounds({ shots, me, focus }: { shots: ShotView[]; me: Me; focus: { k
     };
     if (focus && focus.n !== lastFocus.current) {
       lastFocus.current = focus.n;
+      const d = sightings.find((x) => x.id === focus.key);
+      if (d) {
+        map.setView([d.lat, d.lon], Math.max(map.getZoom(), 15));
+        return;
+      }
       const s = shots.find((x) => x.key === focus.key);
       if (s) {
         const p = pts([s]);
@@ -47,6 +53,7 @@ function FitBounds({ shots, me, focus }: { shots: ShotView[]; me: Me; focus: { k
     }
     if (!didInitial.current) {
       const p = pts(shots);
+      sightings.forEach((d) => p.push([d.lat, d.lon]));
       if (p.length) {
         didInitial.current = true;
         map.fitBounds(L.latLngBounds(p), { padding: [40, 40], maxZoom: 15 });
@@ -55,11 +62,13 @@ function FitBounds({ shots, me, focus }: { shots: ShotView[]; me: Me; focus: { k
         map.setView([me.lat, me.lon], 14);
       }
     }
-  }, [shots, me, focus, map]);
+  }, [shots, sightings, me, focus, map]);
   return null;
 }
 
-export default function ShotMap({ shots, me, focus }: { shots: ShotView[]; me: Me; focus: { key: string; n: number } | null }) {
+export default function ShotMap({ shots, sightings, me, focus }: {
+  shots: ShotView[]; sightings: Sighting[]; me: Me; focus: { key: string; n: number } | null;
+}) {
   const icons = useMemo(() => new Map(shots.map((s) => [s.key, estimateIcon(s.color, String(s.index + 1))])), [shots]);
 
   return (
@@ -88,7 +97,9 @@ export default function ShotMap({ shots, me, focus }: { shots: ShotView[]; me: M
         </LayersControl.BaseLayer>
       </LayersControl>
 
-      <FitBounds shots={shots} me={me} focus={focus} />
+      <FitBounds shots={shots} sightings={sightings} me={me} focus={focus} />
+
+      {sightings.map((d) => <SightingLayer key={d.id} d={d} me={me} />)}
 
       {shots.map((s) => (
         <ShotLayer key={s.key} shot={s} me={me} icon={icons.get(s.key)!} />
@@ -157,6 +168,61 @@ function ShotLayer({ shot, me, icon }: { shot: ShotView; me: Me; icon: L.DivIcon
           </Marker>
         </>
       )}
+    </>
+  );
+}
+
+function deerIcon(d: Sighting) {
+  const st = DEER_STYLE[d.deer];
+  const label = d.count > 1 ? `${st.letter}×${d.count}` : st.letter;
+  const w = 26 + (label.length - 1) * 9;
+  return L.divIcon({
+    className: "",
+    iconSize: [w, 26],
+    iconAnchor: [w / 2, 13],
+    html: `<div class="deer-icon" style="--c:${st.color};width:${w}px">${label}</div>`,
+  });
+}
+
+/** Deer marker + dashed arrow in its direction of travel. Older sightings fade. */
+function SightingLayer({ d, me }: { d: Sighting; me: Me }) {
+  const st = DEER_STYLE[d.deer];
+  const ageH = (Date.now() - d.time) / 3600_000;
+  const opacity = ageH < 1 ? 1 : ageH < 3 ? 0.75 : 0.5;
+  const icon = useMemo(() => deerIcon(d), [d]);
+  const LEN = 350; // metres
+  let arrow: [number, number][] | null = null;
+  let head: [number, number][] | null = null;
+  if (d.heading != null) {
+    const tip = destination(d.lat, d.lon, d.heading, LEN);
+    arrow = [[d.lat, d.lon], tip];
+    const back = destination(tip[0], tip[1], d.heading + 180, 70);
+    head = [tip, destination(back[0], back[1], d.heading - 90, 35), destination(back[0], back[1], d.heading + 90, 35)];
+  }
+  return (
+    <>
+      {arrow && head && (
+        <>
+          <Polyline positions={arrow} pathOptions={{ color: "#fff", weight: 6, opacity: 0.6 * opacity }} />
+          <Polyline positions={arrow} pathOptions={{ color: st.color, weight: 3, dashArray: "8 6", opacity }} />
+          <Polygon positions={head} pathOptions={{ color: st.color, weight: 1, fillColor: st.color, fillOpacity: opacity, opacity }} />
+        </>
+      )}
+      <Marker position={[d.lat, d.lon]} icon={icon} opacity={opacity}>
+        <Tooltip direction="right" offset={[12, 0]}>{d.name} · {fmtTime(d.time)}</Tooltip>
+        <Popup>
+          <b>{d.count > 1 ? `${d.count} × ` : ""}{st.label}</b> seen by {d.name}<br />
+          {fmtTime(d.time)}<br />
+          {d.heading == null ? "Not moving" : <>Heading {compassPoint(d.heading)} ({Math.round(d.heading)}° true)</>}
+          {d.note && <><br />“{d.note}”</>}
+          {me && (
+            <>
+              <br />
+              {formatDistance(distance(me.lat, me.lon, d.lat, d.lon))} {compassPoint(bearingTo(me.lat, me.lon, d.lat, d.lon))} of you
+            </>
+          )}
+        </Popup>
+      </Marker>
     </>
   );
 }

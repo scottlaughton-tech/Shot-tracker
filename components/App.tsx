@@ -1,10 +1,11 @@
 "use client";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { groupShots, triangulate, type Report, type Fix, type Shot } from "@/lib/geo";
-import { colorFor } from "@/lib/colors";
+import { compassPoint, groupShots, triangulate, type Report, type Fix, type Shot, type Sighting } from "@/lib/geo";
+import { colorFor, DEER_STYLE, deerText } from "@/lib/colors";
 import { beep, unlockAudio, vibrate } from "@/lib/alert";
-import ReportForm from "./ReportForm";
+import { ago } from "@/lib/time";
+import ReportForm, { type ReportKind } from "./ReportForm";
 import ShotList from "./ShotList";
 
 const ShotMap = dynamic(() => import("./ShotMap"), {
@@ -19,11 +20,14 @@ const INTERVALS = [0.5, 1, 2, 3, 5, 10, 15, 30];
 
 export default function App() {
   const [reports, setReports] = useState<Report[]>([]);
+  const [sightings, setSightings] = useState<Sighting[]>([]);
+  const [showDeer, setShowDeer] = useState(true);
+  const [deerRange, setDeerRange] = useState<"today" | "all">("today");
   const [intervalMin, setIntervalMin] = useState(2);
   const [hasDatabase, setHasDatabase] = useState(true);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [me, setMe] = useState<Me>(null);
-  const [formOpen, setFormOpen] = useState(false);
+  const [formKind, setFormKind] = useState<ReportKind | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [focus, setFocus] = useState<{ key: string; n: number } | null>(null);
   const [offline, setOffline] = useState(false);
@@ -49,12 +53,32 @@ export default function App() {
     if (v) { unlockAudio(); beep(); }
   }
 
-  /** Pop-up (+ vibration / sound) when someone ELSE reports a shot. */
-  const announce = useCallback((all: Report[], interval: number) => {
+  function popUp(t: { text: string; sub: string; key: string; color: string }) {
+    setToast(t);
+    window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(null), 20000);
+    vibrate();
+    if (soundRef.current) beep();
+  }
+
+  /** Pop-up (+ vibration / sound) when someone ELSE reports a shot or a deer. */
+  const announce = useCallback((all: Report[], deer: Sighting[], interval: number) => {
     const known = seen.current;
-    seen.current = new Set(all.map((r) => r.id));
+    seen.current = new Set([...all.map((r) => r.id), ...deer.map((d) => d.id)]);
     if (!known) return; // first load: don't alert for old reports
     const fresh = all.filter((r) => !known.has(r.id));
+    const freshDeer = deer.filter((d) => !known.has(d.id)).sort((a, b) => b.createdAt - a.createdAt);
+    if (!fresh.length && freshDeer.length) {
+      const d = freshDeer[0];
+      const more = freshDeer.length - 1;
+      popUp({
+        key: d.id,
+        color: DEER_STYLE[d.deer].color,
+        text: `🦌 ${d.name} saw ${deerText(d.deer, d.count)}${d.heading == null ? "" : ` heading ${compassPoint(d.heading)}`}`,
+        sub: `${ago(d.time)}${d.note ? ` · ${d.note}` : ""}${more ? ` · +${more} more new` : ""} · tap to view`,
+      });
+      return;
+    }
     if (!fresh.length) return;
     const shots = groupShots(all, interval);
     const latest = fresh.sort((a, b) => b.createdAt - a.createdAt)[0];
@@ -62,16 +86,13 @@ export default function App() {
     if (!shot) return;
     const names = [...new Set(fresh.map((r) => r.name))].join(", ");
     const n = shot.reports.length;
-    setToast({
+    popUp({
       key: shot.key,
       color: colorFor(shot.index),
       text: n === 1 ? `🔊 ${names} heard a shot` : `🔊 ${names} also heard Shot #${shot.index + 1}`,
       sub: `Shot #${shot.index + 1} · ${n} report${n > 1 ? "s" : ""}${n >= 2 ? " · location estimated" : " · need 1 more to locate"} · tap to view`,
     });
-    window.clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(() => setToast(null), 20000);
-    vibrate();
-    if (soundRef.current) beep();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const load = useCallback(async () => {
@@ -80,8 +101,9 @@ export default function App() {
       if (res.status === 401) return void (window.location.href = "/login");
       const data = await res.json();
       setReports(data.reports);
+      setSightings(data.sightings ?? []);
       setIntervalMin(data.intervalMin);
-      announce(data.reports, data.intervalMin);
+      announce(data.reports, data.sightings ?? [], data.intervalMin);
       setHasDatabase(data.hasDatabase);
       setOffline(false);
     } catch {
@@ -122,6 +144,25 @@ export default function App() {
   );
   const visible = shots.filter((s) => !hidden.has(s.key));
 
+  // Deer sightings: "today" = since midnight on this phone.
+  const midnight = new Date().setHours(0, 0, 0, 0);
+  const rangedDeer = useMemo(
+    () => sightings.filter((d) => deerRange === "all" || d.time >= midnight).sort((a, b) => b.time - a.time),
+    [sightings, deerRange, midnight],
+  );
+  const mapDeer = showDeer ? rangedDeer : [];
+
+  function focusOn(key: string) {
+    if (key.startsWith("sight:")) {
+      setShowDeer(true);
+      const d = sightings.find((x) => x.id === key);
+      if (d && d.time < midnight) setDeerRange("all");
+    } else {
+      setHidden((h) => { const n = new Set(h); n.delete(key); return n; });
+    }
+    setFocus((f) => ({ key, n: (f?.n ?? 0) + 1 }));
+  }
+
   async function changeInterval(v: number) {
     setIntervalMin(v);
     await fetch("/api/settings", {
@@ -140,13 +181,19 @@ export default function App() {
 
   async function remove(id: string) {
     if (!confirm("Delete this report?")) return;
-    await fetch(`/api/reports/${id}`, { method: "DELETE" });
+    await fetch(`/api/reports/${encodeURIComponent(id)}`, { method: "DELETE" });
     load();
   }
 
   async function clearAll() {
-    if (!confirm("Delete ALL reports for everyone? This can't be undone.")) return;
+    if (!confirm("Delete ALL shot reports for everyone? This can't be undone.")) return;
     await fetch("/api/reports", { method: "DELETE" });
+    load();
+  }
+
+  async function clearDeer() {
+    if (!confirm("Delete ALL deer sightings for everyone? This can't be undone.")) return;
+    await fetch("/api/sightings", { method: "DELETE" });
     load();
   }
 
@@ -168,7 +215,7 @@ export default function App() {
           {soundOn ? "🔔" : "🔕"}
         </button>
         <button className="btn small shots-btn" onClick={() => setPanelOpen((o) => !o)}>
-          Shots ({shots.length})
+          List ({shots.length + rangedDeer.length})
         </button>
       </header>
 
@@ -179,7 +226,7 @@ export default function App() {
 
       <div className="main">
         <div className="map-wrap">
-          <ShotMap shots={visible} me={me} focus={focus} />
+          <ShotMap shots={visible} sightings={mapDeer} me={me} focus={focus} />
         </div>
         <aside className={`panel ${panelOpen ? "open" : ""}`}>
           <ShotList
@@ -190,13 +237,16 @@ export default function App() {
             onShowAll={() => setHidden(new Set())}
             onHideAll={() => setHidden(new Set(shots.map((s) => s.key)))}
             onOnlyLatest={() => setHidden(new Set(shots.slice(0, -1).map((s) => s.key)))}
-            onFocus={(key) => {
-              setHidden((h) => { const n = new Set(h); n.delete(key); return n; });
-              setFocus((f) => ({ key, n: (f?.n ?? 0) + 1 }));
-              setPanelOpen(false);
-            }}
+            onFocus={(key) => { focusOn(key); setPanelOpen(false); }}
             onDelete={remove}
             onClearAll={clearAll}
+            sightings={rangedDeer}
+            totalSightings={sightings.length}
+            showDeer={showDeer}
+            onShowDeer={setShowDeer}
+            deerRange={deerRange}
+            onDeerRange={setDeerRange}
+            onClearDeer={clearDeer}
             onClose={() => setPanelOpen(false)}
           />
         </aside>
@@ -204,8 +254,7 @@ export default function App() {
 
       {toast && (
         <button className="toast" style={{ borderLeftColor: toast.color }} onClick={() => {
-          setHidden((h) => { const n = new Set(h); n.delete(toast.key); return n; });
-          setFocus((f) => ({ key: toast.key, n: (f?.n ?? 0) + 1 }));
+          focusOn(toast.key);
           setToast(null);
         }}>
           <strong>{toast.text}</strong>
@@ -214,13 +263,17 @@ export default function App() {
         </button>
       )}
 
-      <button className="report-fab" onClick={() => setFormOpen(true)}>🔊 I heard a shot</button>
+      <div className="fabs">
+        <button className="report-fab" onClick={() => setFormKind("shot")}>🔊 I heard a shot</button>
+        <button className="deer-fab" onClick={() => setFormKind("deer")} aria-label="Report a deer sighting">🦌 Deer</button>
+      </div>
 
-      {formOpen && (
+      {formKind && (
         <ReportForm
           me={me}
-          onClose={() => setFormOpen(false)}
-          onSaved={(id) => { seen.current?.add(id); setFormOpen(false); load(); }}
+          initialKind={formKind}
+          onClose={() => setFormKind(null)}
+          onSaved={(id) => { seen.current?.add(id); setFormKind(null); load(); }}
         />
       )}
     </div>

@@ -110,9 +110,16 @@ p { margin: 0; }
 .reports { list-style: none; margin: 0; padding: 0 0 0 28px; display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem; }
 .clear-all { align-self: flex-start; margin-top: 10px; }
 
-.report-fab {
+.fabs {
   position: fixed; left: 50%; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 22px); transform: translateX(-50%);
-  z-index: 900; background: var(--accent); color: #fff; border: 0; border-radius: 999px;
+  z-index: 900; display: flex; gap: 10px; align-items: center; white-space: nowrap;
+}
+.deer-fab {
+  background: #6b3e1f; color: #fff; border: 0; border-radius: 999px; padding: 16px 18px;
+  font: inherit; font-size: 1.05rem; font-weight: 700; box-shadow: 0 6px 20px rgba(0,0,0,.35); cursor: pointer;
+}
+.report-fab {
+  background: var(--accent); color: #fff; border: 0; border-radius: 999px;
   padding: 16px 26px; font: inherit; font-size: 1.1rem; font-weight: 700; box-shadow: 0 6px 20px rgba(0,0,0,.35);
   cursor: pointer;
 }
@@ -165,3 +172,18 @@ p { margin: 0; }
 .toast span { font-size: 0.85rem; color: var(--muted); }
 .toast .toast-x { position: absolute; top: 8px; right: 10px; font-size: 1rem; padding: 4px; }
 @keyframes toast-in { from { transform: translate(-50%, -20px); opacity: 0; } }
+
+.tabs.kind button { padding: 10px; font-weight: 600; }
+.count { min-width: 2ch; text-align: center; font-size: 1.1rem; }
+.section-title { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.deer-dot {
+  width: 22px; height: 22px; border-radius: 50%; flex: none; color: #fff; font-weight: 800; font-size: 12px;
+  display: grid; place-items: center;
+}
+.sighting { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 0.88rem; }
+.deer-icon {
+  min-width: 26px; height: 26px; padding: 0 6px; border-radius: 13px; border: 2px solid #fff;
+  background: var(--c); color: #fff; font-weight: 800; font-size: 12px; display: grid; place-items: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,.5); white-space: nowrap;
+}
+.sheet > * { flex-shrink: 0; } /* keep every form section full height inside the scrolling sheet */
