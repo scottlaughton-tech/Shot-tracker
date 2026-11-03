@@ -86,11 +86,16 @@ const DEER_TYPES = [
 
 export type Picked = { lat: number; lon: number } | null;
 
-export default function ReportForm({ me, initialKind, onClose, onSaved, picked, onStartPick, hidden }: {
+export type PickKind = "spot" | "heading";
+
+export default function ReportForm({ me, initialKind, onClose, onSaved, picked, pickedHeading, onStartPick, hidden }: {
   me: Me; initialKind: ReportKind; onClose: () => void; onSaved: (id: string) => void;
   /** spot chosen with the map crosshair (deer / sign / blind) */
   picked: Picked;
-  onStartPick: () => void;
+  /** direction of travel drawn on the map (degrees true) */
+  pickedHeading: number | null;
+  /** open the map crosshair: "spot" picks a location; "heading" pulls a line from `origin` */
+  onStartPick: (kind: PickKind, origin?: { lat: number; lon: number }) => void;
   /** true while the map crosshair is open: keep the form (and what's typed) but hide it */
   hidden: boolean;
 }) {
@@ -104,7 +109,7 @@ export default function ReportForm({ me, initialKind, onClose, onSaved, picked, 
   const [mLat, setMLat] = useState("");
   const [mLon, setMLon] = useState("");
 
-  const [mode, setMode] = useState<"compass" | "type" | "still">(() => (load("st:mode") === "type" ? "type" : "compass"));
+  const [mode, setMode] = useState<"compass" | "type" | "still" | "map">(() => (load("st:mode") === "type" ? "type" : "compass"));
   const [typed, setTyped] = useState("");
   const [ref, setRef] = useState<"magnetic" | "true">(() => (load("st:ref") === "true" ? "true" : "magnetic"));
   const [locked, setLocked] = useState<number | null>(null);
@@ -126,7 +131,8 @@ export default function ReportForm({ me, initialKind, onClose, onSaved, picked, 
   const isSign = kind === "sign";
   const noDirection = isSign || isBlind; // sign and blinds have no direction or time
   // "Not moving" only makes sense for deer
-  const dirMode = !isDeer && mode === "still" ? "compass" : mode;
+  // "Not moving" and "On map" are only offered for deer
+  const dirMode = !isDeer && (mode === "still" || mode === "map") ? "compass" : mode;
 
   function getGps() {
     if (!("geolocation" in navigator)) {
@@ -175,6 +181,9 @@ export default function ReportForm({ me, initialKind, onClose, onSaved, picked, 
   let bearingRef: "magnetic" | "true" = "magnetic";
   if (dirMode === "compass") {
     bearing = locked;
+  } else if (dirMode === "map") {
+    bearing = pickedHeading;
+    bearingRef = "true"; // read straight off the map: no magnetic correction
   } else if (dirMode === "type" && typed.trim() !== "" && isFinite(Number(typed))) {
     bearing = Number(typed);
     bearingRef = ref;
@@ -191,12 +200,13 @@ export default function ReportForm({ me, initialKind, onClose, onSaved, picked, 
     } else if (isSign) {
       if (!sign) return setError("Choose what kind of sign you found.");
     } else if (dirMode !== "still" && (bearing == null || bearing < 0 || bearing > 360)) {
-      return setError(dirMode === "compass" ? "Point your phone and lock a direction." : "Enter a direction from 0 to 360.");
+      return setError(dirMode === "compass" ? "Point your phone and lock a direction."
+        : dirMode === "map" ? "Draw the direction on the map." : "Enter a direction from 0 to 360.");
     }
     if (!noDirection && !isFinite(t)) return setError(isDeer ? "Enter the time you saw it." : "Enter the time you heard it.");
     setBusy(true);
     save("st:name", name.trim());
-    if (!noDirection && dirMode !== "still") save("st:mode", dirMode);
+    if (!noDirection && (dirMode === "compass" || dirMode === "type")) save("st:mode", dirMode);
     save("st:ref", ref);
     const base = {
       name: name.trim(), lat: effLoc.lat, lon: effLoc.lon, accuracy: effLoc.accuracy,
@@ -247,7 +257,7 @@ export default function ReportForm({ me, initialKind, onClose, onSaved, picked, 
           {canPick && (
             <div className="tabs where">
               <button type="button" className={!useMap ? "on" : ""} onClick={() => setWhere("me")}>📍 Where I am</button>
-              <button type="button" className={useMap ? "on" : ""} onClick={() => { setWhere("map"); if (!picked) onStartPick(); }}>🎯 Pick on map</button>
+              <button type="button" className={useMap ? "on" : ""} onClick={() => { setWhere("map"); if (!picked) onStartPick("spot"); }}>🎯 Pick on map</button>
             </div>
           )}
           {useMap ? (
@@ -255,10 +265,10 @@ export default function ReportForm({ me, initialKind, onClose, onSaved, picked, 
               <div className="picked">
                 <p><b>🎯 Spot picked</b>{myLoc && <> · {formatDistance(distance(myLoc.lat, myLoc.lon, picked.lat, picked.lon))} {compassPoint(bearingTo(myLoc.lat, myLoc.lon, picked.lat, picked.lon))} of you</>}</p>
                 <p className="mono muted">{picked.lat.toFixed(5)}°, {picked.lon.toFixed(5)}°</p>
-                <button className="btn small" type="button" onClick={onStartPick}>Move crosshair</button>
+                <button className="btn small" type="button" onClick={() => onStartPick("spot")}>Move crosshair</button>
               </div>
             ) : (
-              <button className="btn" type="button" onClick={onStartPick}>🎯 Open map crosshair</button>
+              <button className="btn" type="button" onClick={() => onStartPick("spot")}>🎯 Open map crosshair</button>
             )
           ) : (<>
             {!manual ? (
@@ -342,9 +352,15 @@ export default function ReportForm({ me, initialKind, onClose, onSaved, picked, 
         {!noDirection && (<>
         <fieldset>
           <legend>{isDeer ? "3 · Which way it's heading" : "2 · Direction the sound came from"}</legend>
-          <div className="tabs">
+          <div className={`tabs ${isDeer ? "grid2" : ""}`}>
             <button type="button" className={dirMode === "compass" ? "on" : ""} onClick={() => setMode("compass")}>🧭 Point phone</button>
             <button type="button" className={dirMode === "type" ? "on" : ""} onClick={() => { setMode("type"); compass.stop(); }}>⌨️ Type</button>
+            {isDeer && (
+              <button type="button" className={dirMode === "map" ? "on" : ""} onClick={() => {
+                setMode("map"); compass.stop();
+                if (pickedHeading == null && effLoc) onStartPick("heading", { lat: effLoc.lat, lon: effLoc.lon });
+              }}>🗺 On map</button>
+            )}
             {isDeer && (
               <button type="button" className={dirMode === "still" ? "on" : ""} onClick={() => { setMode("still"); compass.stop(); }}>Not moving</button>
             )}
@@ -385,6 +401,18 @@ export default function ReportForm({ me, initialKind, onClose, onSaved, picked, 
                 <button type="button" className={ref === "true" ? "on" : ""} onClick={() => setRef("true")}>True north</button>
               </div>
               <p className="hint">Most compasses and phone compass apps show <b>magnetic</b> unless you changed a setting.</p>
+            </div>
+          )}
+          {dirMode === "map" && (
+            <div className="stack">
+              {!effLoc ? (
+                <p className="warn">Set where the deer is (step 1) first.</p>
+              ) : (
+                <button type="button" className="btn" onClick={() => onStartPick("heading", { lat: effLoc.lat, lon: effLoc.lon })}>
+                  {pickedHeading == null ? "🗺 Draw direction on map" : "🗺 Redraw on map"}
+                </button>
+              )}
+              <p className="hint">The map opens on the deer. Drag it to pull a line the way the deer went.</p>
             </div>
           )}
           {dirMode === "still" && <p className="muted">Standing, feeding or bedded. No direction needed.</p>}

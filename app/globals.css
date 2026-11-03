@@ -331,3 +331,5 @@ p { margin: 0; }
 .ruler-num { font-size: 1.6rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
 .ruler-bar .btn { padding: 10px 12px; }
 .ruler-label { font-weight: 800; font-size: 12px; padding: 1px 5px; background: #ffd43b; border-color: #111; color: #111; }
+.tabs.grid2 { display: grid; grid-template-columns: 1fr 1fr; }
+.tabs.grid2 button { padding: 10px 4px; }

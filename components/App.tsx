@@ -5,7 +5,7 @@ import { bearingTo, compassPoint, distance, formatDistance, groupShots, triangul
 import { colorFor, DEER_STYLE, deerText, SIGN_COLOR, SIGN_STYLE, BLIND_COLOR, BLIND_STYLE } from "@/lib/colors";
 import { beep, unlockAudio, vibrate } from "@/lib/alert";
 import { ago } from "@/lib/time";
-import ReportForm, { type Picked, type ReportKind } from "./ReportForm";
+import ReportForm, { type Picked, type PickKind, type ReportKind } from "./ReportForm";
 import ShotList, { type LayerKey, type Layers } from "./ShotList";
 
 const ShotMap = dynamic(() => import("./ShotMap"), {
@@ -42,10 +42,15 @@ export default function App() {
   const [me, setMe] = useState<Me>(null);
   const [formKind, setFormKind] = useState<ReportKind | null>(null);
   // Map crosshair ("Pick on map") for deer, sign and blinds
-  const [picking, setPicking] = useState(false);
+  const [pickMode, setPickMode] = useState<PickKind | null>(null);
+  const picking = pickMode !== null;
+  const setPicking = (on: boolean) => { if (!on) setPickMode(null); };
   const [picked, setPicked] = useState<Picked>(null);
+  // "On map" direction for deer: a line pulled from the deer (aimFrom) to the crosshair
+  const [aimFrom, setAimFrom] = useState<{ lat: number; lon: number } | null>(null);
+  const [pickedHeading, setPickedHeading] = useState<number | null>(null);
   const [center, setCenter] = useState<{ lat: number; lon: number } | null>(null);
-  function openForm(k: ReportKind) { setPicked(null); setPicking(false); setRuler(null); setFormKind(k); }
+  function openForm(k: ReportKind) { setPicked(null); setPickedHeading(null); setPicking(false); setRuler(null); setFormKind(k); }
 
   // "My location" button
   const [goto, setGoto] = useState<{ lat: number; lon: number; n: number } | null>(null);
@@ -320,7 +325,9 @@ export default function App() {
         <div className="map-wrap">
           {!picking && !ruler && <button className="blind-fab" onClick={() => openForm("blind")}>🟧 Add blind</button>}
           <ShotMap shots={mapShots} sightings={mapDeer} signs={mapSigns} blinds={mapBlinds} me={me} focus={focus}
-            pickStart={picking ? (picked ?? (me ? { lat: me.lat, lon: me.lon } : null)) : undefined}
+            pickStart={pickMode === "heading" ? aimFrom
+              : picking ? (picked ?? (me ? { lat: me.lat, lon: me.lon } : null)) : undefined}
+            aim={pickMode === "heading" && aimFrom && center ? { from: aimFrom, to: center } : undefined}
             onCenter={(lat, lon) => setCenter({ lat, lon })}
             goto={goto}
             ruler={ruler ?? undefined}
@@ -357,7 +364,7 @@ export default function App() {
               </div>
             </>
           )}
-          {picking && (
+          {pickMode === "spot" && (
             <>
               <div className="crosshair" aria-hidden><span /></div>
               <div className="pick-top">
@@ -376,6 +383,24 @@ export default function App() {
               </div>
             </>
           )}
+          {pickMode === "heading" && (() => {
+            const far = aimFrom && center ? distance(aimFrom.lat, aimFrom.lon, center.lat, center.lon) : 0;
+            const hdg = aimFrom && center && far > 15 ? bearingTo(aimFrom.lat, aimFrom.lon, center.lat, center.lon) : null;
+            return (
+              <>
+                <div className="crosshair" aria-hidden><span /></div>
+                <div className="pick-top">
+                  <b>🗺 Drag the map</b> (or tap) to pull a line from the deer the way it went.
+                  <div className="pick-readout">{hdg == null ? "…" : `Heading ${compassPoint(hdg)} (${Math.round(hdg)}°)`}</div>
+                </div>
+                <div className="pick-bar">
+                  <button className="btn big-ghost" onClick={() => setPicking(false)}>Cancel</button>
+                  <button className="btn primary pick-ok" disabled={hdg == null}
+                    onClick={() => { if (hdg != null) setPickedHeading(hdg); setPicking(false); }}>✓ Use this direction</button>
+                </div>
+              </>
+            );
+          })()}
         </div>
         <aside className={`panel ${panelOpen ? "open" : ""}`}>
           <ShotList
@@ -429,7 +454,12 @@ export default function App() {
           initialKind={formKind}
           onClose={() => { setFormKind(null); setPicking(false); }}
           picked={picked}
-          onStartPick={() => { setRuler(null); setPicking(true); }}
+          pickedHeading={pickedHeading}
+          onStartPick={(kind, origin) => {
+            setRuler(null);
+            if (kind === "heading") setAimFrom(origin ?? null);
+            setPickMode(kind);
+          }}
           hidden={picking}
           onSaved={(id) => { seen.current?.add(id); setFormKind(null); load(); }}
         />

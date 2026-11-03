@@ -55,6 +55,8 @@ Until steps 2–4 are done, the site shows a warning (no passcode, or reports ar
 - **📏 Ruler:** tap it, then tap the map to add points along a path. Each point shows the running
   distance and the bar at the bottom shows the total. **Start from me** begins at your position,
   **↶ Undo** removes the last point, **Done** closes the ruler.
+- **🗺 Direction on map (deer):** in "Which way it's heading" choose **On map**. The map opens on
+  the deer; drag it (or tap) to pull a line the way the deer went, then **✓ Use this direction**.
 - **Alerts:** when someone else reports a shot or a deer, a pop-up appears (Android also vibrates).
   Tap 🔕 in the top bar to also play a beep.
 - **☰ Layers panel:**

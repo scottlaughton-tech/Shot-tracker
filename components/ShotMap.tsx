@@ -105,7 +105,7 @@ function RulerMode({ onAdd }: { onAdd: (lat: number, lon: number) => void }) {
   return null;
 }
 
-export default function ShotMap({ shots, sightings, signs, blinds, me, focus, pickStart, onCenter, goto, ruler, onRulerAdd }: {
+export default function ShotMap({ shots, sightings, signs, blinds, me, focus, pickStart, onCenter, goto, ruler, onRulerAdd, aim }: {
   shots: ShotView[]; sightings: Sighting[]; signs: Sign[]; blinds: Blind[]; me: Me; focus: { key: string; n: number } | null;
   /** set (even to null) while the crosshair is open */
   pickStart?: { lat: number; lon: number } | null;
@@ -114,6 +114,8 @@ export default function ShotMap({ shots, sightings, signs, blinds, me, focus, pi
   /** ruler points; undefined = ruler off */
   ruler?: [number, number][];
   onRulerAdd?: (lat: number, lon: number) => void;
+  /** "On map" direction: line from the deer to the crosshair */
+  aim?: { from: { lat: number; lon: number }; to: { lat: number; lon: number } };
 }) {
   const icons = useMemo(() => new Map(shots.map((s) => [s.key, estimateIcon(s.color, String(s.index + 1))])), [shots]);
 
@@ -147,6 +149,18 @@ export default function ShotMap({ shots, sightings, signs, blinds, me, focus, pi
       <GoTo goto={goto ?? null} />
       {ruler && onRulerAdd && <RulerMode onAdd={onRulerAdd} />}
       {ruler && ruler.length > 0 && <RulerLine pts={ruler} />}
+      {aim && (
+        <>
+          <Polyline positions={[[aim.from.lat, aim.from.lon], [aim.to.lat, aim.to.lon]]} interactive={false}
+            pathOptions={{ color: "#fff", weight: 7, opacity: 0.8 }} />
+          <Polyline positions={[[aim.from.lat, aim.from.lon], [aim.to.lat, aim.to.lon]]} interactive={false}
+            pathOptions={{ color: "#6b3e1f", weight: 4, dashArray: "10 6" }} />
+          <CircleMarker center={[aim.from.lat, aim.from.lon]} radius={9} interactive={false}
+            pathOptions={{ color: "#fff", weight: 3, fillColor: "#6b3e1f", fillOpacity: 1 }}>
+            <Tooltip permanent direction="left" offset={[-10, 0]}>Deer</Tooltip>
+          </CircleMarker>
+        </>
+      )}
       <FitBounds shots={shots} sightings={sightings} signs={signs} blinds={blinds} me={me} focus={focus} />
 
       {blinds.map((x) => (
