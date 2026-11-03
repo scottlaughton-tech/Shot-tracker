@@ -51,3 +51,40 @@ test("grouping uses the window from the first report of each shot", () => {
   const shots = groupShots(rs, 3);
   assert.deepEqual(shots.map((s) => s.reports.length), [3, 2]);
 });
+
+test("a line that doesn't fit the others is left out and the estimate ignores it", () => {
+  const good = [reportFrom("A", 200, 1500, 0, 2), reportFrom("B", 110, 900, 0, -2), reportFrom("C", 330, 1200, 0, 1)];
+  const bad = reportFrom("D", 30, 1000, 0, 40); // 40° off
+  const fix = triangulate([...good, bad]);
+  assert.ok(fix);
+  assert.deepEqual(fix.excluded, ["D"]);
+  assert.ok(distance(fix.lat, fix.lon, shooter[0], shooter[1]) < 100);
+  assert.equal(fix.used, 3);
+});
+
+test("a line pointing away from the others is left out", () => {
+  const good = [reportFrom("A", 200, 1500), reportFrom("B", 110, 900), reportFrom("C", 330, 1200)];
+  const away = reportFrom("D", 60, 800);
+  away.bearingTrue = (away.bearingTrue + 180) % 360;
+  const fix = triangulate([...good, away]);
+  assert.ok(fix);
+  assert.deepEqual(fix.excluded, ["D"]);
+});
+
+test("small aiming errors are not treated as outliers", () => {
+  const fix = triangulate([reportFrom("A", 200, 1500, 0, 4), reportFrom("B", 110, 900, 0, -5), reportFrom("C", 330, 1200, 0, 4)]);
+  assert.ok(fix);
+  assert.equal(fix.excluded.length, 0);
+});
+
+test("with three reports, the one bad line is left out and an estimate is still made", () => {
+  const fix = triangulate([reportFrom("A", 200, 1500, 0, 2), reportFrom("B", 110, 900, 0, -2), reportFrom("D", 330, 1200, 0, 35)]);
+  assert.ok(fix);
+  assert.deepEqual(fix.excluded, ["D"]);
+});
+
+test("three reasonable lines (about 6° off each) are all kept", () => {
+  const fix = triangulate([reportFrom("A", 200, 1500, 0, 6), reportFrom("B", 110, 900, 0, -6), reportFrom("C", 330, 1200, 0, 6)]);
+  assert.ok(fix);
+  assert.equal(fix.excluded.length, 0);
+});

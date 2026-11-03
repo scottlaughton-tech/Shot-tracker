@@ -246,18 +246,26 @@ function ShotLayer({ shot, me, icon, onDelete }: { shot: ShotView; me: Me; icon:
   return (
     <>
       {shot.reports.map((r) => {
-        // Draw past the estimate if there is one, else a fixed length.
-        const toFix = fix ? distance(r.lat, r.lon, fix.lat, fix.lon) : 0;
-        const len = Math.max(4000, toFix + 1500);
+        const left = !!fix && fix.excluded.includes(r.id); // doesn't fit the others: not used
+        // Lines used in an estimate stop level with it; others get a fixed length.
+        let len = 4000;
+        if (fix && !left) {
+          const d = distance(r.lat, r.lon, fix.lat, fix.lon);
+          const off = ((bearingTo(r.lat, r.lon, fix.lat, fix.lon) - r.bearingTrue) * Math.PI) / 180;
+          len = Math.max(d * Math.cos(off), 50);
+        }
         const end = destination(r.lat, r.lon, r.bearingTrue, len);
+        const color = left ? "#8a8a8a" : shot.color;
         return (
           <Fragment key={r.id}>
-            <Polyline positions={[[r.lat, r.lon], end]} pathOptions={{ color: "#fff", weight: 6, opacity: 0.6 }} />
-            <Polyline positions={[[r.lat, r.lon], end]} pathOptions={{ color: shot.color, weight: 3 }}>
-              <Tooltip sticky>{r.name} · {Math.round(r.bearingTrue)}°</Tooltip>
+            <Polyline positions={[[r.lat, r.lon], end]} interactive={false}
+              pathOptions={{ color: "#fff", weight: 4, opacity: left ? 0.35 : 0.55 }} />
+            <Polyline positions={[[r.lat, r.lon], end]}
+              pathOptions={{ color, weight: 2, dashArray: left ? "3 7" : "8 6", opacity: left ? 0.8 : 1 }}>
+              <Tooltip sticky>{r.name} · {Math.round(r.bearingTrue)}°{left ? " · not used" : ""}</Tooltip>
             </Polyline>
             <CircleMarker center={[r.lat, r.lon]} radius={6} bubblingMouseEvents={!tap} eventHandlers={tapHandlers(tap, r.lat, r.lon)}
-              pathOptions={{ color: "#fff", weight: 2, fillColor: shot.color, fillOpacity: 1 }}>
+              pathOptions={{ color: "#fff", weight: 2, fillColor: color, fillOpacity: 1 }}>
               <Tooltip permanent direction="right" offset={[8, 0]} className="name-label">{r.name}</Tooltip>
               <Pop>
                 <b>{r.name}</b> · Shot #{shot.index + 1}<br />
@@ -265,6 +273,7 @@ function ShotLayer({ shot, me, icon, onDelete }: { shot: ShotView; me: Me; icon:
                 Bearing {Math.round(r.bearingTrue)}° true
                 {r.bearingRef === "magnetic" && <> ({Math.round(r.bearingInput)}° magnetic)</>}<br />
                 {r.lat.toFixed(5)}, {r.lon.toFixed(5)}
+                {left && <><br /><span style={{ color: "#666" }}>Grey: doesn&apos;t line up with the other reports, so it&apos;s not used in the estimate.</span></>}
                 <DelBtn id={r.id} onDelete={onDelete} label={`Delete ${r.name}'s report`} />
               </Pop>
             </CircleMarker>

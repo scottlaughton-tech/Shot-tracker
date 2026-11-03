@@ -69,6 +69,13 @@ Until steps 2–4 are done, the site shows a warning (no passcode, or reports ar
 - **Group** (top bar): how many minutes apart reports can be and still count as one shot.
   This setting is shared with the whole party.
 
+### Lines on the map
+
+- Shot lines are thin and dashed, and **stop at the estimate**.
+- With 3+ reports, a line that **doesn't line up with the others** (misses their crossing point by
+  more than about 20°, or points away from it) is drawn **grey** and **left out of the estimate**.
+  Tap it to see why. With only 2 reports there's nothing to compare against, so nothing is greyed out.
+
 ### How accurate is it?
 
 Bearings to sound in the woods are rough. Echoes off hills and lakes are common, so the math

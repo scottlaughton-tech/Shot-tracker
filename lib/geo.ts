@@ -146,10 +146,14 @@ export type Fix = {
   orientation: number;
   /** Rough single-number uncertainty (metres) */
   radius: number;
-  /** names of reporters whose line points AWAY from the estimate */
+  /** names of reporters left out because their line doesn't fit the others */
   behind: string[];
+  /** ids of the reports left out of the calculation (drawn grey) */
+  excluded: string[];
   used: number;
 };
+
+type Diag = { id: string; along: number; norm: number };
 
 /** Assumed 1-sigma error of a bearing by ear + compass. */
 export const BEARING_SIGMA_DEG = 5;
@@ -159,7 +163,7 @@ export const BEARING_SIGMA_DEG = 5;
  * Weighted least squares: minimise sum of (perpendicular distance / expected error)^2,
  * where expected error grows with distance from the listener.
  */
-export function triangulate(reports: Report[]): Fix | null {
+function solve(reports: Report[]): (Omit<Fix, "behind" | "excluded"> & { diag: Diag[] }) | null {
   if (reports.length < 2) return null;
 
   // Local flat projection around the reporters' centroid (fine for < ~20 km).
@@ -205,17 +209,14 @@ export function triangulate(reports: Report[]): Fix | null {
     });
   }
 
-  const behind: string[] = [];
   let chi2 = 0;
-  lines.forEach((l, i) => {
+  const diag: Diag[] = lines.map((l, i) => {
     const along = (x - l.px) * l.dx + (y - l.py) * l.dy;
-    if (along < 0) behind.push(l.r.name);
     const perp = (x - l.px) * -l.dy + (y - l.py) * l.dx;
     chi2 += weights[i] * perp * perp;
+    // how far the line misses the estimate, in units of its expected error
+    return { id: l.r.id, along, norm: Math.abs(perp) / (Math.max(Math.abs(along), 100) * sigma) };
   });
-
-  // Two lines that cross behind someone are not a real fix.
-  if (reports.length === 2 && behind.length > 0) return null;
 
   // If lines disagree more than our assumed error, inflate the uncertainty.
   const dof = reports.length - 2;
@@ -241,7 +242,61 @@ export function triangulate(reports: Report[]): Fix | null {
   const far = Math.max(...reports.map((r) => distance(r.lat, r.lon, lat, lon)));
   if (far > 20000) return null;
 
-  return { lat, lon, major, minor, orientation, radius: Math.sqrt(major * minor), behind, used: reports.length };
+  return { lat, lon, major, minor, orientation, radius: Math.sqrt(major * minor), used: reports.length, diag };
+}
+
+/** A line missing the estimate by more than this many expected errors (or pointing away) is left out. */
+export const OUTLIER_SIGMAS = 4; // about 20° at ±5°
+
+/** How far a report's line misses a point, in units of its expected error (Infinity if it points away). */
+function missBy(r: Report, lat: number, lon: number): number {
+  const d = distance(r.lat, r.lon, lat, lon);
+  const off = rad(bearingTo(r.lat, r.lon, lat, lon) - r.bearingTrue);
+  const along = d * Math.cos(off);
+  if (along < 0) return Infinity;
+  const perp = Math.abs(d * Math.sin(off));
+  return perp / (Math.max(along, 100) * Math.tan(rad(BEARING_SIGMA_DEG)));
+}
+
+/**
+ * Best estimate of where a shot came from, ignoring lines that don't fit the others.
+ * With 3+ reports, each line is checked against the estimate made from the OTHER lines
+ * (so a bad line can't hide by pulling the estimate toward itself). The worst one is dropped
+ * if it points away or misses by more than OUTLIER_SIGMAS expected errors; repeat, keeping 2+ lines.
+ */
+export function triangulate(reports: Report[]): Fix | null {
+  /** a usable fix: lines meet within range and (for 2 lines) in front of both listeners */
+  const valid = (rs: Report[]) => {
+    const f = solve(rs);
+    if (!f) return null;
+    if (rs.length === 2 && f.diag.some((d) => d.along < 0)) return null;
+    return f;
+  };
+  let used = [...reports];
+  const excluded: Report[] = [];
+  while (used.length >= 3) {
+    // how badly each line misses the estimate made from the other lines
+    const candidates = used
+      .map((r, i) => {
+        const rest = used.filter((_, j) => j !== i);
+        const f = valid(rest);
+        return { i, rest, miss: f ? missBy(r, f.lat, f.lon) : -1 };
+      })
+      .filter((c) => c.miss > OUTLIER_SIGMAS)
+      .sort((a, b) => b.miss - a.miss);
+    if (!candidates.length) break;
+    excluded.push(used[candidates[0].i]);
+    used = candidates[0].rest;
+  }
+  let f = valid(used);
+  if (!f && excluded.length) { // fall back to every line rather than no estimate
+    used = [...reports];
+    excluded.length = 0;
+    f = valid(used);
+  }
+  if (!f) return null;
+  const { diag: _diag, ...fix } = f; // eslint-disable-line @typescript-eslint/no-unused-vars
+  return { ...fix, behind: excluded.map((r) => r.name), excluded: excluded.map((r) => r.id) };
 }
 
 /** Polygon (lat/lon) approximating the confidence ellipse, for drawing. */

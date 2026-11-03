@@ -154,7 +154,7 @@ export default function ShotList(p: Props) {
                         {fix ? <> · ±{formatDistance(fix.radius)}{p.me && <> · <b>{away(fix.lat, fix.lon)}</b> of you</>}</>
                           : s.reports.length < 2 ? " · need 2+ to locate" : " · lines don't cross"}
                       </span>
-                      {fix && fix.behind.length > 0 && <span className="warn">⚠ Check {fix.behind.join(", ")}&apos;s bearing</span>}
+                      {fix && fix.behind.length > 0 && <span className="warn">Not used (doesn&apos;t line up): {fix.behind.join(", ")}</span>}
                     </button>
                     <button className="chev" aria-expanded={open === s.key} aria-label="Show reports"
                       onClick={() => setOpen(open === s.key ? null : s.key)}>{open === s.key ? "▴" : "▾"}</button>
@@ -165,6 +165,7 @@ export default function ShotList(p: Props) {
                         <li key={r.id}>
                           <span className="grow">
                             <b>{r.name}</b> · {fmtTime(r.shotTime)} · {Math.round(r.bearingTrue)}° true
+                            {fix?.excluded.includes(r.id) && <span className="muted"> · not used</span>}
                             {r.bearingRef === "magnetic" && <span className="muted"> ({Math.round(r.bearingInput)}° mag)</span>}
                           </span>
                           {edit && <button className="trash" onClick={() => p.onDelete(r.id)} aria-label={`Delete ${r.name}'s report`}>🗑</button>}
