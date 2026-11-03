@@ -42,7 +42,10 @@ Until steps 2–4 are done, the site shows a warning (no passcode, or reports ar
   In the list panel you can turn them on or off and choose **Today** or **All**.
 - **🍂 Sign button:** mark deer sign where you're standing: ground scrape, tree scrape (rub),
   droppings, tracks or a bed, with an optional note. Shown as purple diamonds (Sc, Rb, Dp, Tk, Bd).
-- **Clearing:** shots, deer sightings and deer sign each have their own "Clear all" button
+- **Blinds:** in the list panel tap **＋ Add a blind** (or choose **Blind** in the report form).
+  Give it a name, pick tree stand / ladder stand / ground blind / box blind / other, and stand at it
+  (or type coordinates). Blinds show as orange squares with their name always visible.
+- **Clearing:** shots, deer sightings, deer sign and blinds each have their own "Clear all" button
   at the bottom of their section in the list panel.
 - **Alerts:** when someone else reports a shot or a deer, a pop-up appears (Android also vibrates).
   Tap 🔕 in the top bar to also play a beep.

@@ -2,8 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import { compassPoint, norm360 } from "@/lib/geo";
 import { declinationAt } from "@/lib/declination";
-import { SIGN_STYLE } from "@/lib/colors";
-import type { SignType } from "@/lib/geo";
+import { BLIND_STYLE, SIGN_STYLE } from "@/lib/colors";
+import type { BlindType, SignType } from "@/lib/geo";
 import type { Me } from "./App";
 
 type Loc = { lat: number; lon: number; accuracy: number | null };
@@ -78,7 +78,7 @@ function useCompass() {
 }
 
 // ---------- Form ----------
-export type ReportKind = "shot" | "deer" | "sign";
+export type ReportKind = "shot" | "deer" | "sign" | "blind";
 const DEER_TYPES = [
   { v: "buck", label: "Buck" }, { v: "doe", label: "Doe" },
   { v: "fawn", label: "Fawn" }, { v: "unknown", label: "Not sure" },
@@ -106,13 +106,17 @@ export default function ReportForm({ me, initialKind, onClose, onSaved }: {
   const [count, setCount] = useState(1);
   const [note, setNote] = useState("");
   const [sign, setSign] = useState<SignType | null>(null);
+  const [blindTitle, setBlindTitle] = useState("");
+  const [blindType, setBlindType] = useState<BlindType>("tree-stand");
 
   const [time, setTime] = useState(() => toLocalInput(tappedAt));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const isDeer = kind === "deer";
+  const isBlind = kind === "blind";
   const isSign = kind === "sign";
+  const noDirection = isSign || isBlind; // sign and blinds have no direction or time
   // "Not moving" only makes sense for deer
   const dirMode = !isDeer && mode === "still" ? "compass" : mode;
 
@@ -168,21 +172,25 @@ export default function ReportForm({ me, initialKind, onClose, onSaved }: {
     const t = new Date(time).getTime();
     if (!name.trim()) return setError("Enter your first name.");
     if (!effLoc) return setError("Your location is needed.");
-    if (isSign) {
+    if (isBlind) {
+      if (!blindTitle.trim()) return setError("Give the blind a name, e.g. Cedar ridge.");
+    } else if (isSign) {
       if (!sign) return setError("Choose what kind of sign you found.");
     } else if (dirMode !== "still" && (bearing == null || bearing < 0 || bearing > 360)) {
       return setError(dirMode === "compass" ? "Point your phone and lock a direction." : "Enter a direction from 0 to 360.");
     }
-    if (!isSign && !isFinite(t)) return setError(isDeer ? "Enter the time you saw it." : "Enter the time you heard it.");
+    if (!noDirection && !isFinite(t)) return setError(isDeer ? "Enter the time you saw it." : "Enter the time you heard it.");
     setBusy(true);
     save("st:name", name.trim());
-    if (!isSign && dirMode !== "still") save("st:mode", dirMode);
+    if (!noDirection && dirMode !== "still") save("st:mode", dirMode);
     save("st:ref", ref);
     const base = { name: name.trim(), lat: effLoc.lat, lon: effLoc.lon, accuracy: effLoc.accuracy };
-    const res = await fetch(isSign ? "/api/signs" : isDeer ? "/api/sightings" : "/api/reports", {
+    const res = await fetch(isBlind ? "/api/blinds" : isSign ? "/api/signs" : isDeer ? "/api/sightings" : "/api/reports", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(isSign
+      body: JSON.stringify(isBlind
+        ? { ...base, title: blindTitle.trim(), blind: blindType, note }
+        : isSign
         ? { ...base, sign, note }
         : isDeer
         ? { ...base, deer, count, note, heading: dirMode === "still" ? null : bearing, headingRef: bearingRef, time: t }
@@ -193,21 +201,22 @@ export default function ReportForm({ me, initialKind, onClose, onSaved }: {
     if (!res.ok) return setError((await res.json().catch(() => ({}))).error ?? "Something went wrong.");
     const saved = await res.json().catch(() => ({}));
     compass.stop();
-    onSaved(saved.report?.id ?? saved.sighting?.id ?? saved.sign?.id ?? "");
+    onSaved(saved.report?.id ?? saved.sighting?.id ?? saved.sign?.id ?? saved.blind?.id ?? "");
   }
 
   return (
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
         <div className="row between">
-          <h2>{isSign ? "Mark deer sign" : isDeer ? "Report a deer" : "Report a shot"}</h2>
+          <h2>{isBlind ? "Add a blind" : isSign ? "Mark deer sign" : isDeer ? "Report a deer" : "Report a shot"}</h2>
           <button className="btn small ghost" onClick={onClose}>✕</button>
         </div>
 
         <div className="tabs kind">
           <button type="button" className={kind === "shot" ? "on" : ""} onClick={() => setKind("shot")}>🔊 Shot</button>
           <button type="button" className={isDeer ? "on" : ""} onClick={() => setKind("deer")}>🦌 Deer</button>
-          <button type="button" className={isSign ? "on" : ""} onClick={() => { setKind("sign"); compass.stop(); }}>🍂 Sign</button>
+          <button type="button" className={isSign ? "on" : ""} onClick={() => { setKind("sign"); compass.stop(); setError(""); }}>🍂 Sign</button>
+          <button type="button" className={isBlind ? "on" : ""} onClick={() => { setKind("blind"); compass.stop(); setError(""); }}>🟧 Blind</button>
         </div>
 
         <label>
@@ -242,6 +251,25 @@ export default function ReportForm({ me, initialKind, onClose, onSaved }: {
           )}
         </fieldset>
 
+        {isBlind && (
+          <fieldset>
+            <legend>2 · About the blind</legend>
+            <label>
+              Blind name *
+              <input value={blindTitle} onChange={(e) => { setBlindTitle(e.target.value); setError(""); }} maxLength={40} placeholder="e.g. Cedar ridge" />
+            </label>
+            <div className="chips">
+              {(Object.keys(BLIND_STYLE) as BlindType[]).map((k) => (
+                <button key={k} type="button" className={blindType === k ? "on blind" : ""} onClick={() => setBlindType(k)}>
+                  {BLIND_STYLE[k].label}
+                </button>
+              ))}
+            </div>
+            <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={120} placeholder="Note (optional), e.g. faces the creek, good for west wind" />
+            <p className="hint">Stand at the blind and use GPS, or tap <b>Enter coordinates</b> above if you&apos;re adding it from somewhere else.</p>
+          </fieldset>
+        )}
+
         {isSign && (
           <fieldset>
             <legend>2 · What kind of sign</legend>
@@ -275,7 +303,7 @@ export default function ReportForm({ me, initialKind, onClose, onSaved }: {
           </fieldset>
         )}
 
-        {!isSign && (<>
+        {!noDirection && (<>
         <fieldset>
           <legend>{isDeer ? "3 · Which way it's heading" : "2 · Direction the sound came from"}</legend>
           <div className="tabs">

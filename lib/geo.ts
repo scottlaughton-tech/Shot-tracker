@@ -48,6 +48,21 @@ export type Sign = {
   createdAt: number;
 };
 
+export type BlindType = "tree-stand" | "ladder-stand" | "ground-blind" | "box-blind" | "other";
+
+export type Blind = {
+  id: string; // starts with "blind:"
+  name: string; // who added it
+  title: string; // the blind's name, e.g. "Cedar ridge"
+  lat: number;
+  lon: number;
+  accuracy: number | null;
+  blind: BlindType;
+  note: string;
+  time: number;
+  createdAt: number;
+};
+
 const R = 6371000; // Earth radius, metres
 const rad = (d: number) => (d * Math.PI) / 180;
 const deg = (r: number) => (r * 180) / Math.PI;

@@ -28,3 +28,13 @@ export const SIGN_STYLE = {
   tracks: { short: "Tk", label: "Tracks" },
   bed: { short: "Bd", label: "Bed" },
 } as const;
+
+// Blinds: blaze-orange squares with the blind's name always shown.
+export const BLIND_COLOR = "#ff6a00";
+export const BLIND_STYLE = {
+  "tree-stand": { label: "Tree stand" },
+  "ladder-stand": { label: "Ladder stand" },
+  "ground-blind": { label: "Ground blind" },
+  "box-blind": { label: "Box blind" },
+  other: { label: "Other" },
+} as const;

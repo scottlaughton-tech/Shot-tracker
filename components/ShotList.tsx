@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
-import { bearingTo, compassPoint, distance, formatDistance, type Sighting, type Sign } from "@/lib/geo";
-import { DEER_STYLE, SIGN_COLOR, SIGN_STYLE } from "@/lib/colors";
+import { bearingTo, compassPoint, distance, formatDistance, type Sighting, type Sign, type Blind } from "@/lib/geo";
+import { BLIND_COLOR, BLIND_STYLE, DEER_STYLE, SIGN_COLOR, SIGN_STYLE } from "@/lib/colors";
 import { ago } from "@/lib/time";
 import type { Me, ShotView } from "./App";
 
@@ -31,6 +31,11 @@ type Props = {
   showSign: boolean;
   onShowSign: (v: boolean) => void;
   onClearSigns: () => void;
+  blinds: Blind[];
+  showBlind: boolean;
+  onShowBlind: (v: boolean) => void;
+  onClearBlinds: () => void;
+  onAddBlind: () => void;
 };
 
 export default function ShotList(p: Props) {
@@ -179,6 +184,37 @@ export default function ShotList(p: Props) {
       ))}
       {p.signs.length > 0 && (
         <button className="btn small danger clear-all" onClick={p.onClearSigns}>Clear all deer sign</button>
+      )}
+
+      <div className="row between section-title">
+        <h2>🟧 Blinds</h2>
+        <label className="row gap" style={{ flexDirection: "row", fontWeight: 500 }}>
+          <input type="checkbox" checked={p.showBlind} onChange={(e) => p.onShowBlind(e.target.checked)} style={{ width: 20, height: 20 }} />
+          On map
+        </label>
+      </div>
+      <button className="btn small" style={{ alignSelf: "flex-start" }} onClick={p.onAddBlind}>＋ Add a blind</button>
+      {p.blinds.length === 0 && <p className="muted">No blinds added yet.</p>}
+      {p.blinds.map((x) => (
+        <div key={x.id} className="sighting">
+          <div className="row gap">
+            <span className="deer-dot" style={{ background: BLIND_COLOR, borderRadius: 4 }}>■</span>
+            <span className="grow">
+              <strong>{x.title}</strong> · {BLIND_STYLE[x.blind].label}
+              <br />
+              <span className="muted">Added by {x.name}</span>
+              {p.me && <span className="muted"> · {formatDistance(distance(p.me.lat, p.me.lon, x.lat, x.lon))} {compassPoint(bearingTo(p.me.lat, p.me.lon, x.lat, x.lon))} of you</span>}
+              {x.note && <><br />“{x.note}”</>}
+            </span>
+          </div>
+          <div className="row gap" style={{ justifyContent: "flex-end", marginTop: 6 }}>
+            <button className="btn small" onClick={() => p.onFocus(x.id)}>Zoom</button>
+            <button className="btn small danger" onClick={() => p.onDelete(x.id)}>Delete</button>
+          </div>
+        </div>
+      ))}
+      {p.blinds.length > 0 && (
+        <button className="btn small danger clear-all" onClick={p.onClearBlinds}>Clear all blinds</button>
       )}
     </div>
   );

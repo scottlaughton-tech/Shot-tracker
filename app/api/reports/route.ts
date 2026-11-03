@@ -10,8 +10,8 @@ const unauthorized = () => NextResponse.json({ error: "Not signed in" }, { statu
 
 export async function GET() {
   if (!(await isAuthed())) return unauthorized();
-  const { reports, sightings, signs, intervalMin } = await loadAll();
-  return NextResponse.json({ reports, sightings, signs, intervalMin, hasDatabase });
+  const { reports, sightings, signs, blinds, intervalMin } = await loadAll();
+  return NextResponse.json({ reports, sightings, signs, blinds, intervalMin, hasDatabase });
 }
 
 export async function POST(req: Request) {

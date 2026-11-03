@@ -1,8 +1,8 @@
 "use client";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { compassPoint, groupShots, triangulate, type Report, type Fix, type Shot, type Sighting, type Sign } from "@/lib/geo";
-import { colorFor, DEER_STYLE, deerText, SIGN_COLOR, SIGN_STYLE } from "@/lib/colors";
+import { compassPoint, groupShots, triangulate, type Report, type Fix, type Shot, type Sighting, type Sign, type Blind } from "@/lib/geo";
+import { colorFor, DEER_STYLE, deerText, SIGN_COLOR, SIGN_STYLE, BLIND_COLOR, BLIND_STYLE } from "@/lib/colors";
 import { beep, unlockAudio, vibrate } from "@/lib/alert";
 import { ago } from "@/lib/time";
 import ReportForm, { type ReportKind } from "./ReportForm";
@@ -25,6 +25,8 @@ export default function App() {
   const [deerRange, setDeerRange] = useState<"today" | "all">("today");
   const [signs, setSigns] = useState<Sign[]>([]);
   const [showSign, setShowSign] = useState(true);
+  const [blinds, setBlinds] = useState<Blind[]>([]);
+  const [showBlind, setShowBlind] = useState(true);
   const [intervalMin, setIntervalMin] = useState(2);
   const [hasDatabase, setHasDatabase] = useState(true);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
@@ -65,10 +67,11 @@ export default function App() {
   }
 
   /** Pop-up (+ vibration / sound) when someone ELSE reports a shot or a deer. */
-  const announce = useCallback((all: Report[], deer: Sighting[], sg: Sign[], interval: number) => {
+  const announce = useCallback((all: Report[], deer: Sighting[], sg: Sign[], bl: Blind[], interval: number) => {
     const known = seen.current;
-    seen.current = new Set([...all.map((r) => r.id), ...deer.map((d) => d.id), ...sg.map((x) => x.id)]);
+    seen.current = new Set([...all, ...deer, ...sg, ...bl].map((x) => x.id));
     if (!known) return; // first load: don't alert for old reports
+    const freshBlind = bl.filter((x) => !known.has(x.id));
     const freshSign = sg.filter((x) => !known.has(x.id)).sort((a, b) => b.createdAt - a.createdAt);
     const fresh = all.filter((r) => !known.has(r.id));
     const freshDeer = deer.filter((d) => !known.has(d.id)).sort((a, b) => b.createdAt - a.createdAt);
@@ -84,6 +87,14 @@ export default function App() {
       return;
     }
     if (!fresh.length) {
+      if (!freshDeer.length && !freshSign.length && freshBlind.length) {
+        const x = freshBlind[0];
+        popUp({
+          key: x.id, color: BLIND_COLOR,
+          text: `🟧 ${x.name} added a blind: ${x.title}`,
+          sub: `${BLIND_STYLE[x.blind].label}${freshBlind.length > 1 ? ` · +${freshBlind.length - 1} more` : ""} · tap to view`,
+        }, true);
+      }
       if (!freshDeer.length && freshSign.length) {
         const x = freshSign[0];
         const more = freshSign.length - 1;
@@ -118,8 +129,9 @@ export default function App() {
       setReports(data.reports);
       setSightings(data.sightings ?? []);
       setSigns(data.signs ?? []);
+      setBlinds(data.blinds ?? []);
       setIntervalMin(data.intervalMin);
-      announce(data.reports, data.sightings ?? [], data.signs ?? [], data.intervalMin);
+      announce(data.reports, data.sightings ?? [], data.signs ?? [], data.blinds ?? [], data.intervalMin);
       setHasDatabase(data.hasDatabase);
       setOffline(false);
     } catch {
@@ -170,9 +182,13 @@ export default function App() {
 
   const sortedSigns = useMemo(() => [...signs].sort((a, b) => b.time - a.time), [signs]);
   const mapSigns = showSign ? sortedSigns : [];
+  const sortedBlinds = useMemo(() => [...blinds].sort((a, b) => a.title.localeCompare(b.title)), [blinds]);
+  const mapBlinds = showBlind ? sortedBlinds : [];
 
   function focusOn(key: string) {
-    if (key.startsWith("sign:")) {
+    if (key.startsWith("blind:")) {
+      setShowBlind(true);
+    } else if (key.startsWith("sign:")) {
       setShowSign(true);
     } else if (key.startsWith("sight:")) {
       setShowDeer(true);
@@ -212,6 +228,12 @@ export default function App() {
     load();
   }
 
+  async function clearBlinds() {
+    if (!confirm("Delete ALL blinds for everyone? This can't be undone.")) return;
+    await fetch("/api/blinds", { method: "DELETE" });
+    load();
+  }
+
   async function clearSigns() {
     if (!confirm("Delete ALL deer sign for everyone? This can't be undone.")) return;
     await fetch("/api/signs", { method: "DELETE" });
@@ -242,7 +264,7 @@ export default function App() {
           {soundOn ? "🔔" : "🔕"}
         </button>
         <button className="btn small shots-btn" onClick={() => setPanelOpen((o) => !o)}>
-          List ({shots.length + rangedDeer.length + signs.length})
+          List
         </button>
       </header>
 
@@ -253,7 +275,7 @@ export default function App() {
 
       <div className="main">
         <div className="map-wrap">
-          <ShotMap shots={visible} sightings={mapDeer} signs={mapSigns} me={me} focus={focus} />
+          <ShotMap shots={visible} sightings={mapDeer} signs={mapSigns} blinds={mapBlinds} me={me} focus={focus} />
         </div>
         <aside className={`panel ${panelOpen ? "open" : ""}`}>
           <ShotList
@@ -278,6 +300,11 @@ export default function App() {
             showSign={showSign}
             onShowSign={setShowSign}
             onClearSigns={clearSigns}
+            blinds={sortedBlinds}
+            showBlind={showBlind}
+            onShowBlind={setShowBlind}
+            onClearBlinds={clearBlinds}
+            onAddBlind={() => { setPanelOpen(false); setFormKind("blind"); }}
             onClose={() => setPanelOpen(false)}
           />
         </aside>

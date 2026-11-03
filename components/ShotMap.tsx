@@ -5,8 +5,8 @@ import { Fragment, useEffect, useMemo, useRef } from "react";
 import {
   Circle, CircleMarker, LayersControl, MapContainer, Marker, Polygon, Polyline, Popup, TileLayer, Tooltip, useMap,
 } from "react-leaflet";
-import { bearingTo, compassPoint, destination, distance, ellipsePolygon, formatDistance, type Sighting, type Sign } from "@/lib/geo";
-import { DEER_STYLE, SIGN_STYLE } from "@/lib/colors";
+import { bearingTo, compassPoint, destination, distance, ellipsePolygon, formatDistance, type Sighting, type Sign, type Blind } from "@/lib/geo";
+import { BLIND_STYLE, DEER_STYLE, SIGN_STYLE } from "@/lib/colors";
 import type { Me, ShotView } from "./App";
 
 const DEFAULT_CENTER: [number, number] = [45.0985, -78.3197];
@@ -22,8 +22,8 @@ function estimateIcon(color: string, label: string) {
 }
 
 /** Zooms the map to fit everything once on first data, and when a shot is "Zoomed". */
-function FitBounds({ shots, sightings, signs, me, focus }: {
-  shots: ShotView[]; sightings: Sighting[]; signs: Sign[]; me: Me; focus: { key: string; n: number } | null;
+function FitBounds({ shots, sightings, signs, blinds, me, focus }: {
+  shots: ShotView[]; sightings: Sighting[]; signs: Sign[]; blinds: Blind[]; me: Me; focus: { key: string; n: number } | null;
 }) {
   const map = useMap();
   const didInitial = useRef(false);
@@ -40,7 +40,7 @@ function FitBounds({ shots, sightings, signs, me, focus }: {
     };
     if (focus && focus.n !== lastFocus.current) {
       lastFocus.current = focus.n;
-      const d = sightings.find((x) => x.id === focus.key) ?? signs.find((x) => x.id === focus.key);
+      const d = sightings.find((x) => x.id === focus.key) ?? signs.find((x) => x.id === focus.key) ?? blinds.find((x) => x.id === focus.key);
       if (d) {
         map.setView([d.lat, d.lon], Math.max(map.getZoom(), 15));
         return;
@@ -57,6 +57,7 @@ function FitBounds({ shots, sightings, signs, me, focus }: {
       const p = pts(shots);
       sightings.forEach((d) => p.push([d.lat, d.lon]));
       signs.forEach((d) => p.push([d.lat, d.lon]));
+      blinds.forEach((d) => p.push([d.lat, d.lon]));
       if (p.length) {
         didInitial.current = true;
         map.fitBounds(L.latLngBounds(p), { padding: [40, 40], maxZoom: 15 });
@@ -65,12 +66,12 @@ function FitBounds({ shots, sightings, signs, me, focus }: {
         map.setView([me.lat, me.lon], 14);
       }
     }
-  }, [shots, sightings, signs, me, focus, map]);
+  }, [shots, sightings, signs, blinds, me, focus, map]);
   return null;
 }
 
-export default function ShotMap({ shots, sightings, signs, me, focus }: {
-  shots: ShotView[]; sightings: Sighting[]; signs: Sign[]; me: Me; focus: { key: string; n: number } | null;
+export default function ShotMap({ shots, sightings, signs, blinds, me, focus }: {
+  shots: ShotView[]; sightings: Sighting[]; signs: Sign[]; blinds: Blind[]; me: Me; focus: { key: string; n: number } | null;
 }) {
   const icons = useMemo(() => new Map(shots.map((s) => [s.key, estimateIcon(s.color, String(s.index + 1))])), [shots]);
 
@@ -100,7 +101,20 @@ export default function ShotMap({ shots, sightings, signs, me, focus }: {
         </LayersControl.BaseLayer>
       </LayersControl>
 
-      <FitBounds shots={shots} sightings={sightings} signs={signs} me={me} focus={focus} />
+      <FitBounds shots={shots} sightings={sightings} signs={signs} blinds={blinds} me={me} focus={focus} />
+
+      {blinds.map((x) => (
+        <Marker key={x.id} position={[x.lat, x.lon]} icon={blindIcon} zIndexOffset={-100}>
+          <Tooltip permanent direction="right" offset={[10, 0]} className="blind-label">{x.title}</Tooltip>
+          <Popup>
+            <b>{x.title}</b> · {BLIND_STYLE[x.blind].label}<br />
+            Added by {x.name}
+            {x.note && <><br />“{x.note}”</>}
+            <br />{x.lat.toFixed(5)}, {x.lon.toFixed(5)}
+            {me && <><br />{formatDistance(distance(me.lat, me.lon, x.lat, x.lon))} {compassPoint(bearingTo(me.lat, me.lon, x.lat, x.lon))} of you</>}
+          </Popup>
+        </Marker>
+      ))}
 
       {signs.map((x) => (
         <Marker key={x.id} position={[x.lat, x.lon]} icon={signIcon(x)}>
@@ -254,3 +268,8 @@ function signIcon(x: Sign) {
   }
   return icon;
 }
+
+const blindIcon = L.divIcon({
+  className: "", iconSize: [22, 22], iconAnchor: [11, 11],
+  html: `<div class="blind-icon">▲</div>`,
+});

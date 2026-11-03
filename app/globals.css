@@ -208,3 +208,10 @@ p { margin: 0; }
   .report-fab { padding: 14px 16px; font-size: 1rem; }
   .deer-fab, .sign-fab { padding: 14px 12px; font-size: 0.95rem; }
 }
+.chips button.on.blind { background: #ff6a00; border-color: #ff6a00; }
+.tabs.kind button { padding: 10px 4px; }
+.blind-icon {
+  width: 22px; height: 22px; background: #ff6a00; border: 2px solid #fff; border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.5); display: grid; place-items: center; color: #fff; font-size: 13px; font-weight: 900;
+}
+.blind-label { font-weight: 700; padding: 1px 5px; font-size: 12px; color: #a33f00; }
