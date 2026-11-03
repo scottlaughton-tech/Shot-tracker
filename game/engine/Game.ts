@@ -15,6 +15,7 @@ import { foliageAtlas } from "../world/foliageTextures";
 import { wind } from "../world/vegMaterials";
 import { loadPhotos, type Photos } from "../world/photoTextures";
 import { Rocks } from "../world/rocks";
+import { buildFence } from "../world/fence";
 import { dropTable, LOAD_308, stepBullet, zeroAngle, type BulletState } from "../ballistics";
 import { buildDeerAsset, type DeerAsset } from "../deer/model";
 import type { Deer } from "../deer/Deer";
@@ -24,7 +25,8 @@ import { boltSound, hitSound, impactSound, reloadSound, shotSound } from "./audi
 export const WIDE_HFOV = 70; // degrees across the screen in the open view
 export const ZOOMS = [4, 6, 8, 12, 16];
 const FOV_AT_1X = 19.2; // a 4–16× hunting scope shows about 4.8° at 4×
-const AIM_SENSITIVITY = 0.55; // dragging across the whole scope moves the aim ~half a scope width
+const AIM_SENSITIVITY = 0.65; // dragging across the whole scope moves the aim ~2/3 of a scope width
+const REGRIP_MS = 350;        // lift and re-touch this fast and the scope stays where it was
 const MAG_SIZE = 5;
 export const ROUNDS_PER_HUNT = 10;
 const BOLT_TIME = 1.25;
@@ -143,6 +145,7 @@ export class Game {
     this.scene.add(this.grass.group);
     this.rocks = new Rocks(this.terrain.heightAt, this.photos);
     this.scene.add(this.rocks.group);
+    this.scene.add(buildFence(this.terrain.heightAt));
     console.log(`[g] forest: ${this.forest.count} trees, ${this.forest.models.length} models`);
     this.addStandRail();
     await step(0.92, "Deer");
@@ -214,8 +217,15 @@ export class Game {
 
   // ---------- aiming ----------
 
-  /** finger down at a screen point: open the scope looking there */
+  private closeTimer = 0;
+
+  /** finger down at a screen point: open the scope looking there (or keep it, if this is a quick re-grip) */
   beginAim(clientX: number, clientY: number) {
+    if (this.closeTimer) {
+      window.clearTimeout(this.closeTimer);
+      this.closeTimer = 0;
+      if (this.scoped) return; // re-grip: keep aiming from where we were
+    }
     const rect = this.canvas.getBoundingClientRect();
     const x = clientX - rect.left, y = clientY - rect.top;
     const v = new THREE.Vector3((x / this.w) * 2 - 1, -(y / this.h) * 2 + 1, 0.5).unproject(this.wideCam).sub(this.wideCam.position).normalize();
@@ -238,9 +248,12 @@ export class Game {
     this.clampAim();
   }
 
-  endAim() {
-    this.scoped = false;
-    this.pushHud();
+  /** finger lifted: lower the rifle after a moment (so a quick re-grip keeps the scope up) */
+  endAim(immediate = false) {
+    if (this.closeTimer) window.clearTimeout(this.closeTimer);
+    this.closeTimer = 0;
+    if (immediate) { this.scoped = false; this.pushHud(); return; }
+    this.closeTimer = window.setTimeout(() => { this.closeTimer = 0; this.scoped = false; this.pushHud(); }, REGRIP_MS);
   }
 
   setZoom(z: number) {
@@ -474,7 +487,7 @@ export class Game {
       this.huntTime += dt;
       if (this.frames % 30 === 0) this.sky.setLight(Math.min(1, this.huntTime / Game.HUNT_LENGTH));
       this.hunt.update(dt);
-      if (this.hunt.over && !this.endedSent) { this.endedSent = true; this.scoped = false; this.pushHud(); this.events.end(this.hunt.summary()); }
+      if (this.hunt.over && !this.endedSent) { this.endedSent = true; this.endAim(true); this.events.end(this.hunt.summary()); }
     }
     this.effects.update(dt);
     this.sky.update(this.time);

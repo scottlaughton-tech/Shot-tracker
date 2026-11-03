@@ -87,10 +87,13 @@ export function swaleness(x: number, z: number): number {
   return swaleFrom(x, z, n4(x / 25, z / 25));
 }
 
-/** Tall old-field grass (near) vs short hay stubble (far field). 1 = tall grass. */
+/** Tall old-field grass (near) vs the shorter meadow beyond the swale. 1 = tall grass. */
 export function tallGrass(x: number, z: number): number {
   return 1 - smoothstep(-300, -380, z + 40 * n3(x / 120, z / 120));
 }
+
+/** How tall the grass is in the far meadow relative to the old field (it was hayed last year). */
+export const MEADOW_HEIGHT = 0.65;
 
 export type Ground = { h: number; edge: number; open: number; tall: number; hedge: number; swale: number };
 

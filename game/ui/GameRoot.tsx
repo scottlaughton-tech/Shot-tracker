@@ -76,7 +76,7 @@ export default function GameRoot() {
     const vis = () => {
       const g = gameRef.current;
       if (!g) return;
-      if (document.hidden) { g.paused = true; g.endAim(); aimPointer.current = null; setScreen((s) => (s === "play" ? "menu" : s)); }
+      if (document.hidden) { g.paused = true; g.endAim(true); aimPointer.current = null; setScreen((s) => (s === "play" ? "menu" : s)); }
     };
     document.addEventListener("visibilitychange", vis);
     const stop = (e: Event) => e.preventDefault(); // iOS pinch-zoom
@@ -149,7 +149,7 @@ export default function GameRoot() {
       {screen === "play" && (
         <div className="game-touch" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
           <div className="g-top">
-            <button className="g-quit" onPointerDown={(e) => e.stopPropagation()} onClick={() => { if (gameRef.current) { gameRef.current.endAim(); gameRef.current.paused = true; } setScreen("menu"); }} aria-label="Pause">❚❚</button>
+            <button className="g-quit" onPointerDown={(e) => e.stopPropagation()} onClick={() => { if (gameRef.current) { gameRef.current.endAim(true); gameRef.current.paused = true; } setScreen("menu"); }} aria-label="Pause">❚❚</button>
             <button className="g-quit" onPointerDown={(e) => e.stopPropagation()} onClick={() => { setMuted(!isMuted()); setMute(isMuted()); }} aria-label={mute ? "Sound on" : "Sound off"}>{mute ? "🔇" : "🔊"}</button>
             {hud && <Ammo hud={hud} />}
           </div>

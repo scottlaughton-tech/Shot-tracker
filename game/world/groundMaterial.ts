@@ -87,7 +87,11 @@ vec3 photo2(sampler2D t, vec2 p, float s, float mixer) {
       // November stubble: straw and tan with grey patches, only a hint of green
       hayC = mix(g * vec3(1.12, 0.98, 0.72), vec3(0.47, 0.39, 0.25), 0.4) * mix(0.84, 1.12, nMid.r);
       hayC = mix(hayC, hayC * vec3(0.9, 0.92, 0.95), smoothstep(0.55, 0.8, nMid.a));
-      hayC *= 0.9 + 0.1 * sin(p.x * 0.9 + nBig.g * 6.0);
+      // raked rows (lighter strips of cut hay) and fine stubble streaks
+      float row = smoothstep(0.35, 0.9, sin(p.x * 1.15 + nBig.g * 5.0 + nMid.r * 1.5) * 0.5 + 0.5);
+      hayC *= 0.86 + 0.2 * row;
+      float stub = texture2D(uNoise, vec2(p.x * 4.1, p.y * 0.55)).g * 0.6 + texture2D(uNoise, vec2(p.x * 9.3, p.y * 1.1)).b * 0.4;
+      hayC *= mix(1.0, 0.78 + 0.42 * stub, 1.0 - smoothstep(60.0, 260.0, dist));
     }
     if (open < 0.99 || brush > 0.01) {
       // forest floor: leaf litter

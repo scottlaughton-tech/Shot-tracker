@@ -4,7 +4,7 @@
 // where you're looking closely and sparse far away.
 import * as THREE from "three";
 import { Card } from "./foliageTextures";
-import { sampleGroundFast, type Ground } from "./layout";
+import { MEADOW_HEIGHT, sampleGroundFast, type Ground } from "./layout";
 import { hash2, smoothstep } from "./noise";
 import { makeClump } from "./treeGen";
 import { foliageMaterial, foliageDepthMaterial } from "./vegMaterials";
@@ -40,8 +40,8 @@ export class Grass {
       return { mesh, n: 0 };
     };
     this.grass = mk(Card.Grass, CAP, 3);
-    // mown hay stubble: short, narrow and evenly lit, so it doesn't line up like bricks
-    this.hay = mk(Card.Grass, 9000, 11, 4, 0.88);
+    // distant grass: evenly lit (no dark base) so overlapping clumps read as one surface
+    this.hay = mk(Card.Grass, 9000, 11, 3, 0.97);
     this.rod = mk(Card.Goldenrod, 3000, 5);
     this.fern = mk(Card.Fern, 2000, 7);
   }
@@ -96,13 +96,14 @@ export class Grass {
             continue;
           }
           const tall = Math.max(g.tall, g.hedge * 0.8, g.swale);
-          const height = tall > 0.5 ? 0.38 + 0.36 * h2 : 0.13 + 0.1 * h2 + 0.3 * tall;
+          // old field near the stand; beyond the swale an unmown meadow of shorter grass
+          const height = (0.38 + 0.36 * h2) * (MEADOW_HEIGHT + (1 - MEADOW_HEIGHT) * tall);
           // far away, short stubble is just ground colour; wide flat cards would line up like bricks
-          if (level >= 2 && height < 0.3) continue;
+          if (level >= 2 && height < 0.22) continue;
           if (level >= 2 && h1 > 0.65) continue; // thinner with distance: the ground colour carries it
           if (level >= 3 && h2 > 0.5) continue;
           p.set(x, y, z);
-          if (tall < 0.35) {
+          if (false) {
             // hay stubble: only worth drawing as clumps right up close; farther out the
             // ground texture reads better than rows of little cards
             if (this.hay.n >= 9000 || r / magnification > 9) continue;
@@ -114,19 +115,27 @@ export class Grass {
             this.hay.mesh.setMatrixAt(this.hay.n, m4); this.hay.mesh.setColorAt(this.hay.n, col); this.hay.n++;
             continue;
           }
-          const width = Math.min(cell * (1.25 + 0.4 * h1), Math.max(0.8, height * 3));
-          s.set(width, height * (0.7 + 0.3 * smoothstep(0.35, 0.8, g.open)), width);
-          m4.compose(p, q, s);
-          // colour: straw / grey-tan / russet, a touch of green in the hay
-          const t = hash2(cx, cz, 99);
-          if (tall > 0.5) col.setRGB(0.98 + 0.14 * t, 0.94 + 0.1 * t, 0.86 + 0.06 * h2);
-          else col.setRGB(0.95 + 0.08 * t, 1.0 + 0.08 * h2, 0.82 + 0.06 * t);
-          this.grass.mesh.setMatrixAt(this.grass.n, m4); this.grass.mesh.setColorAt(this.grass.n, col); this.grass.n++;
+          const hgt = height * (0.7 + 0.3 * smoothstep(0.35, 0.8, g.open));
+          // colour drifts smoothly across the field (patches), with a little per-clump variety close up
+          const drift = 0.5 + 0.5 * Math.sin(x * 0.031 + Math.sin(z * 0.023) * 2.1) * Math.cos(z * 0.027 - x * 0.011);
+          const t = level === 0 ? hash2(cx, cz, 99) * 0.6 + drift * 0.4 : drift;
+          if (tall > 0.5) col.setRGB(0.98 + 0.14 * t, 0.94 + 0.1 * t, 0.86 + 0.05 * t);
+          else col.setRGB(0.96 + 0.1 * t, 0.97 + 0.08 * t, 0.82 + 0.05 * t);
+          if (level === 0) {
+            const width = Math.min(cell * (1.25 + 0.4 * h1), Math.max(0.8, height * 3));
+            m4.compose(p, q, s.set(width, hgt, width));
+            this.grass.mesh.setMatrixAt(this.grass.n, m4); this.grass.mesh.setColorAt(this.grass.n, col); this.grass.n++;
+          } else if (this.hay.n < 9000) {
+            const width = cell * (1.6 + 0.3 * h1);
+            m4.compose(p, q, s.set(width, hgt, width));
+            this.hay.mesh.setMatrixAt(this.hay.n, m4); this.hay.mesh.setColorAt(this.hay.n, col); this.hay.n++;
+          }
           // goldenrod patches in the old field
           if (tall > 0.5 && this.rod.n < 3000) {
             const patch = Math.sin(x * 0.07 + Math.sin(z * 0.05) * 2) * Math.cos(z * 0.06 - x * 0.02);
             if (patch > 0.5 && h1 > 0.62) {
-              s.set(width * 0.8, 0.72 + 0.3 * h2, width * 0.8);
+              const rw = Math.min(cell * 1.2, 1.1);
+              s.set(rw, 0.72 + 0.3 * h2, rw);
               m4.compose(p, q, s);
               col.setRGB(1, 1, 1);
               this.rod.mesh.setMatrixAt(this.rod.n, m4); this.rod.mesh.setColorAt(this.rod.n, col); this.rod.n++;
