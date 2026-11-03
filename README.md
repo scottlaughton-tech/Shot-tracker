@@ -39,7 +39,7 @@ Until steps 2–4 are done, the site shows a warning (no passcode, or reports ar
 - **🦌 Deer button:** report a buck, doe or fawn sighting at your location, with how many,
   which way it's heading (same "Point phone" or "Type" input, or **Not moving**) and an optional note.
   Sightings show on the map as lettered markers (B, D, F) with dashed arrows. Older sightings fade.
-  In the list panel you can turn them on or off and choose **Last 48 h** or **All days**.
+  In the list panel you can turn them on or off and choose **All days** (default) or **Last 48 h**.
 - **🍂 Sign button:** mark deer sign where you're standing: ground scrape, tree scrape (rub),
   droppings, tracks or a bed, with an optional note. Shown as purple diamonds (Sc, Rb, Dp, Tk, Bd).
 - **Blinds:** in the list panel tap **＋ Add a blind** (or choose **Blind** in the report form).

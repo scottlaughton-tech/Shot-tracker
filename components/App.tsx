@@ -33,7 +33,7 @@ export default function App() {
       return n;
     });
   }
-  const [deerRange, setDeerRange] = useState<"recent" | "all">("recent");
+  const [deerRange, setDeerRange] = useState<"recent" | "all">("all");
   const [signs, setSigns] = useState<Sign[]>([]);
   const [blinds, setBlinds] = useState<Blind[]>([]);
   const [intervalMin, setIntervalMin] = useState(2);
