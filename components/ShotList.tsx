@@ -39,8 +39,8 @@ type Props = {
   // deer
   sightings: Sighting[];
   totalSightings: number;
-  deerRange: "today" | "all";
-  onDeerRange: (v: "today" | "all") => void;
+  deerRange: "recent" | "all";
+  onDeerRange: (v: "recent" | "all") => void;
   onClearDeer: () => void;
   // sign
   signs: Sign[];
@@ -182,10 +182,10 @@ export default function ShotList(p: Props) {
         {tab === "deer" && (
           <>
             <div className="tabs small">
-              <button className={p.deerRange === "today" ? "on" : ""} onClick={() => p.onDeerRange("today")}>Today</button>
+              <button className={p.deerRange === "recent" ? "on" : ""} onClick={() => p.onDeerRange("recent")}>Last 48 h</button>
               <button className={p.deerRange === "all" ? "on" : ""} onClick={() => p.onDeerRange("all")}>All days ({p.totalSightings})</button>
             </div>
-            {p.sightings.length === 0 && <p className="muted empty">No deer sightings {p.deerRange === "today" ? "today" : "yet"}.</p>}
+            {p.sightings.length === 0 && <p className="muted empty">No deer sightings {p.deerRange === "recent" ? "in the last 48 hours" : "yet"}.</p>}
             {p.sightings.map((d) => {
               const st = DEER_STYLE[d.deer];
               return (

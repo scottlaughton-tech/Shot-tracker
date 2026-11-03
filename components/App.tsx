@@ -33,7 +33,7 @@ export default function App() {
       return n;
     });
   }
-  const [deerRange, setDeerRange] = useState<"today" | "all">("today");
+  const [deerRange, setDeerRange] = useState<"recent" | "all">("recent");
   const [signs, setSigns] = useState<Sign[]>([]);
   const [blinds, setBlinds] = useState<Blind[]>([]);
   const [intervalMin, setIntervalMin] = useState(2);
@@ -218,11 +218,12 @@ export default function App() {
   );
   const visible = shots.filter((s) => !hidden.has(s.key));
 
-  // Deer sightings: "today" = since midnight on this phone.
-  const midnight = new Date().setHours(0, 0, 0, 0);
+  // Deer sightings: "recent" = last 48 h, the same window a sighting can be entered for,
+  // so anything someone reports is always shown by default.
+  const recentCutoff = Math.floor(Date.now() / 60000) * 60000 - 48 * 3600_000;
   const rangedDeer = useMemo(
-    () => sightings.filter((d) => deerRange === "all" || d.time >= midnight).sort((a, b) => b.time - a.time),
-    [sightings, deerRange, midnight],
+    () => sightings.filter((d) => deerRange === "all" || d.time >= recentCutoff).sort((a, b) => b.time - a.time),
+    [sightings, deerRange, recentCutoff],
   );
   const mapShots = layers.shots ? visible : [];
   const mapDeer = layers.deer ? rangedDeer : [];
@@ -240,7 +241,7 @@ export default function App() {
     } else if (key.startsWith("sight:")) {
       setLayer("deer", true);
       const d = sightings.find((x) => x.id === key);
-      if (d && d.time < midnight) setDeerRange("all");
+      if (d && d.time < recentCutoff) setDeerRange("all");
     } else {
       setLayer("shots", true);
       setHidden((h) => { const n = new Set(h); n.delete(key); return n; });
@@ -433,7 +434,7 @@ export default function App() {
 
       {toast && !picking && (
         <button className="toast" style={{ borderLeftColor: toast.color }} onClick={() => {
-          focusOn(toast.key);
+          if (toast.key) focusOn(toast.key);
           setToast(null);
         }}>
           <strong>{toast.text}</strong>
@@ -461,7 +462,15 @@ export default function App() {
             setPickMode(kind);
           }}
           hidden={picking}
-          onSaved={(id) => { seen.current?.add(id); setFormKind(null); load(); }}
+          onSaved={(id) => {
+            seen.current?.add(id);
+            const what = formKind === "deer" ? "Deer sighting" : formKind === "sign" ? "Deer sign" : formKind === "blind" ? "Blind" : "Shot report";
+            // Shots are grouped first, so there's no single spot to zoom to; others can be tapped to view.
+            const zoomable = formKind !== "shot";
+            popUp({ key: zoomable ? id : "", color: "#2b8a3e", text: `✓ ${what} saved`, sub: zoomable ? "Everyone can see it now · tap to view" : "Everyone can see it now" }, true);
+            setFormKind(null);
+            load();
+          }}
         />
       )}
     </div>
