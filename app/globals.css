@@ -333,3 +333,13 @@ p { margin: 0; }
 .ruler-label { font-weight: 800; font-size: 12px; padding: 1px 5px; background: #ffd43b; border-color: #111; color: #111; }
 .tabs.grid2 { display: grid; grid-template-columns: 1fr 1fr; }
 .tabs.grid2 button { padding: 10px 4px; }
+
+/* Deer marker direction arrowhead */
+.deer-wrap { position: relative; height: 26px; }
+.deer-wrap .deer-icon { position: relative; z-index: 1; }
+.deer-dir { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+.deer-dir span {
+  position: absolute; left: -7px; width: 0; height: 0;
+  border-left: 7px solid transparent; border-right: 7px solid transparent; border-bottom: 11px solid var(--c);
+  filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 1px 1px rgba(0,0,0,.4));
+}

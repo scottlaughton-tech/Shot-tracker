@@ -266,42 +266,27 @@ function deerIcon(d: Sighting) {
   const st = DEER_STYLE[d.deer];
   const label = d.count > 1 ? `${st.letter}×${d.count}` : st.letter;
   const w = 26 + (label.length - 1) * 9;
+  // Small arrowhead sticking out of the marker's edge in the direction of travel.
+  // It's part of the icon, so it stays the same size at every zoom level.
+  const r = w / 2 + 1; // distance from centre to the marker edge
+  const arrow = d.heading == null ? "" :
+    `<div class="deer-dir" style="transform:rotate(${Math.round(d.heading)}deg)"><span style="--c:${st.color};top:${-r - 9}px"></span></div>`;
   return L.divIcon({
     className: "",
     iconSize: [w, 26],
     iconAnchor: [w / 2, 13],
-    html: `<div class="deer-icon" style="--c:${st.color};width:${w}px">${label}</div>`,
+    html: `<div class="deer-wrap" style="width:${w}px">${arrow}<div class="deer-icon" style="--c:${st.color};width:${w}px">${label}</div></div>`,
   });
 }
 
-/** Deer marker + dashed arrow in its direction of travel. Older sightings fade. */
+/** Deer marker with a small direction arrowhead. Older sightings fade. */
 function SightingLayer({ d, me }: { d: Sighting; me: Me }) {
   const st = DEER_STYLE[d.deer];
   const ageH = (Date.now() - d.time) / 3600_000;
   const opacity = ageH < 1 ? 1 : ageH < 3 ? 0.75 : 0.5;
   const icon = useMemo(() => deerIcon(d), [d]);
-  const LEN = 350; // metres
-  let arrow: [number, number][] | null = null;
-  let head: [number, number][] | null = null;
-  if (d.heading != null) {
-    const tip = destination(d.lat, d.lon, d.heading, LEN);
-    arrow = [[d.lat, d.lon], tip];
-    const back = destination(tip[0], tip[1], d.heading + 180, 70);
-    head = [tip, destination(back[0], back[1], d.heading - 90, 35), destination(back[0], back[1], d.heading + 90, 35)];
-  }
   return (
     <>
-      {d.observer && (
-        <Polyline positions={[[d.observer.lat, d.observer.lon], [d.lat, d.lon]]}
-          pathOptions={{ color: "#333", weight: 1.5, dashArray: "2 6", opacity: 0.7 * opacity }} />
-      )}
-      {arrow && head && (
-        <>
-          <Polyline positions={arrow} pathOptions={{ color: "#fff", weight: 6, opacity: 0.6 * opacity }} />
-          <Polyline positions={arrow} pathOptions={{ color: st.color, weight: 3, dashArray: "8 6", opacity }} />
-          <Polygon positions={head} pathOptions={{ color: st.color, weight: 1, fillColor: st.color, fillOpacity: opacity, opacity }} />
-        </>
-      )}
       <Marker position={[d.lat, d.lon]} icon={icon} opacity={opacity}>
         <Tooltip direction="right" offset={[12, 0]}>{d.name} · {fmtTime(d.time)}</Tooltip>
         <Popup>
@@ -309,7 +294,7 @@ function SightingLayer({ d, me }: { d: Sighting; me: Me }) {
           {fmtTime(d.time)}<br />
           {d.heading == null ? "Not moving" : <>Heading {compassPoint(d.heading)} ({Math.round(d.heading)}° true)</>}
           {d.note && <><br />“{d.note}”</>}
-          {d.observer && <><br /><span style={{ color: "#666" }}>Spotted from {formatDistance(distance(d.observer.lat, d.observer.lon, d.lat, d.lon))} away (dotted line)</span></>}
+          {d.observer && <><br /><span style={{ color: "#666" }}>Spotted from {formatDistance(distance(d.observer.lat, d.observer.lon, d.lat, d.lon))} away</span></>}
           {me && (
             <>
               <br />
