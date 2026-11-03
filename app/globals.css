@@ -379,15 +379,8 @@ p { margin: 0; }
 .qs-mini {
   width: 54px; height: 54px; flex: none; border-radius: 50%; border: 2px solid #4b5a47; background: #1c241b; position: relative;
 }
-.qs-mini::after { /* fixed marker: the top of the phone */
-  content: ""; position: absolute; left: 50%; top: -6px; transform: translateX(-50%);
-  border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 9px solid #ffd43b;
-}
-.qs-needle { position: absolute; inset: 0; transition: transform .12s linear; }
-.qs-needle span { /* red north needle, rotates so it always points to north */
-  position: absolute; left: 50%; top: 6px; width: 0; height: 0; transform: translateX(-50%);
-  border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 20px solid #ff6b6b;
-}
+.qs-n { position: absolute; top: 2px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 800; color: #ff6b6b; }
+.qs-needle { position: absolute; inset: 0; transition: transform .12s linear; display: grid; place-items: center; }
 .qs-deg { font-size: 2.2rem; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
 .qs-deg span { font-size: 1.3rem; color: #ffd43b; }
 .qs-instr { font-size: 0.92rem; color: #dfe7db; margin-top: 2px; }

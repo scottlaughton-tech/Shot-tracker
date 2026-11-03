@@ -99,8 +99,12 @@ export default function QuickShot({ me, tappedAt, compass, onManual, onClose, on
           <p className="qs-problem">{compassProblem} Use <b>Enter manually</b> below.</p>
         ) : (
           <div className="qs-live">
+            {/* North-up, like the map: the arrow points where the phone points (same as the map arrow and line) */}
             <div className="qs-mini" aria-hidden>
-              <div className="qs-needle" style={{ transform: `rotate(${-(trueH ?? 0)}deg)` }}><span /></div>
+              <span className="qs-n">N</span>
+              <div className="qs-needle" style={{ transform: `rotate(${trueH ?? 0}deg)`, opacity: trueH == null ? 0.3 : 1 }}>
+                <svg viewBox="-9 -11 18 21" width="20" height="23"><path d="M0,-10 L8,9 L0,4.5 L-8,9 Z" fill="#ffd43b" stroke="#111" strokeWidth="1.2" strokeLinejoin="round" /></svg>
+              </div>
             </div>
             <div>
               <div className="qs-deg" aria-live="polite">
