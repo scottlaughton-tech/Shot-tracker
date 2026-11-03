@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import { bearingTo, compassPoint, distance, formatDistance, type Blind, type Sighting, type Sign } from "@/lib/geo";
 import { BLIND_COLOR, BLIND_STYLE, DEER_STYLE, SIGN_COLOR, SIGN_STYLE } from "@/lib/colors";
-import { ago } from "@/lib/time";
+import { ago, when } from "@/lib/time";
 import type { Me, ShotView } from "./App";
 
 export type LayerKey = "shots" | "deer" | "sign" | "blinds";
@@ -192,7 +192,7 @@ export default function ShotList(p: Props) {
                 <Row key={d.id} badge={st.letter} color={st.color} edit={edit}
                   onOpen={() => p.onFocus(d.id)} onDelete={() => p.onDelete(d.id)}
                   title={`${d.count > 1 ? `${d.count} × ` : ""}${st.label}${d.heading == null ? " · not moving" : ` · heading ${compassPoint(d.heading)}`}`}
-                  sub={`${d.name} · ${fmtTime(d.time)} (${ago(d.time)})${away(d.lat, d.lon) ? ` · ${away(d.lat, d.lon)}` : ""}`}
+                  sub={`${d.name} · ${when(d.time)} (${ago(d.time)})${away(d.lat, d.lon) ? ` · ${away(d.lat, d.lon)}` : ""}`}
                   note={d.note} />
               );
             })}

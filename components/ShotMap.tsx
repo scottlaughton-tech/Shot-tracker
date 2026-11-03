@@ -10,7 +10,8 @@ import { BLIND_STYLE, DEER_STYLE, SIGN_STYLE } from "@/lib/colors";
 import type { Me, ShotView } from "./App";
 
 const DEFAULT_CENTER: [number, number] = [45.0985, -78.3197];
-const fmtTime = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
+import { when } from "@/lib/time";
+const fmtTime = when; // date + time, e.g. "Yesterday 11:30 AM"
 
 function estimateIcon(color: string, label: string) {
   return L.divIcon({
@@ -181,7 +182,7 @@ export default function ShotMap({ shots, sightings, signs, blinds, me, focus, pi
           <Tooltip direction="right" offset={[12, 0]}>{SIGN_STYLE[x.sign].label}</Tooltip>
           <Popup>
             <b>{SIGN_STYLE[x.sign].label}</b><br />
-            Marked by {x.name}, {new Date(x.time).toLocaleDateString([], { month: "short", day: "numeric" })} {fmtTime(x.time)}
+            Marked by {x.name}, {fmtTime(x.time)}
             {x.note && <><br />“{x.note}”</>}
             {me && <><br />{formatDistance(distance(me.lat, me.lon, x.lat, x.lon))} {compassPoint(bearingTo(me.lat, me.lon, x.lat, x.lon))} of you</>}
           </Popup>
