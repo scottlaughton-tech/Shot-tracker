@@ -375,7 +375,8 @@ p { margin: 0; }
 .qs-when { font-size: 0.95rem; }
 .qs-x { width: 40px; height: 40px; border-radius: 50%; border: 1px solid #3a4537; background: #1c241b; color: #fff; font-size: 1rem; cursor: pointer; flex: none; }
 .qs-name { background: #1c241b; color: #fff; border-color: #4b5a47; }
-.qs-live { display: flex; align-items: center; gap: 12px; }
+.qs-live { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; padding: 2px 0 4px; }
+.qs-up { filter: drop-shadow(0 2px 3px rgba(0,0,0,.5)); }
 .qs-mini {
   width: 54px; height: 54px; flex: none; border-radius: 50%; border: 2px solid #4b5a47; background: #1c241b; position: relative;
 }
@@ -383,7 +384,7 @@ p { margin: 0; }
 .qs-needle { position: absolute; inset: 0; transition: transform .12s linear; display: grid; place-items: center; }
 .qs-deg { font-size: 2.2rem; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
 .qs-deg span { font-size: 1.3rem; color: #ffd43b; }
-.qs-instr { font-size: 0.92rem; color: #dfe7db; margin-top: 2px; }
+.qs-instr { font-size: 1.02rem; color: #dfe7db; margin-top: 2px; font-weight: 600; }
 .qs-cal { color: #ffd43b; font-size: 0.85rem; font-weight: 700; }
 .qs-problem { color: #ffd8a8; font-size: 0.95rem; }
 .qs-gps { color: #b7c4b2; font-size: 0.82rem; text-align: center; }

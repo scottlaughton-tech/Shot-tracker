@@ -99,19 +99,14 @@ export default function QuickShot({ me, tappedAt, compass, onManual, onClose, on
           <p className="qs-problem">{compassProblem} Use <b>Enter manually</b> below.</p>
         ) : (
           <div className="qs-live">
-            {/* North-up, like the map: the arrow points where the phone points (same as the map arrow and line) */}
-            <div className="qs-mini" aria-hidden>
-              <span className="qs-n">N</span>
-              <div className="qs-needle" style={{ transform: `rotate(${trueH ?? 0}deg)`, opacity: trueH == null ? 0.3 : 1 }}>
-                <svg viewBox="-9 -11 18 21" width="20" height="23"><path d="M0,-10 L8,9 L0,4.5 L-8,9 Z" fill="#ffd43b" stroke="#111" strokeWidth="1.2" strokeLinejoin="round" /></svg>
-              </div>
+            {/* Fixed arrow: the TOP of the phone is the pointer (it does not turn) */}
+            <svg className="qs-up" viewBox="-12 -14 24 28" width="46" height="54" aria-hidden="true">
+              <path d="M0,-13 L11,12 L0,6 L-11,12 Z" fill="#ffd43b" stroke="#111" strokeWidth="1.2" strokeLinejoin="round" />
+            </svg>
+            <div className="qs-deg" aria-live="polite">
+              {trueH == null ? "…" : <>{Math.round(trueH)}° <span>{compassPoint(trueH)}</span></>}
             </div>
-            <div>
-              <div className="qs-deg" aria-live="polite">
-                {trueH == null ? "…" : <>{Math.round(trueH)}° <span>{compassPoint(trueH)}</span></>}
-              </div>
-              <div className="qs-instr">Point the <b>top of your phone</b> toward the shot</div>
-            </div>
+            <div className="qs-instr">Point in the direction you heard the shot</div>
           </div>
         )}
         {needsCalibration && !compassProblem && <p className="qs-cal">Compass needs calibrating: wave the phone in a figure 8.</p>}
