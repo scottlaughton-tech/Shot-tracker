@@ -85,13 +85,11 @@ two people standing close together.
 
 ## For developers
 
+See **[docs/DEVELOPER.md](docs/DEVELOPER.md)** for the architecture, data model, API, triangulation
+math, compass handling, design decisions, known limitations and ideas not yet built.
+
 ```bash
 npm install
 npm run dev        # http://localhost:3000. No passcode and an in-memory database when run locally
 npm test           # triangulation unit tests
 ```
-
-- `lib/geo.ts`: grouping and weighted least-squares triangulation
-- `lib/declination.ts`: magnetic declination (World Magnetic Model 2025)
-- `lib/store.ts`: Upstash Redis storage (falls back to memory)
-- `components/`: map (Leaflet + OpenTopoMap / Esri satellite), report form, shot list
