@@ -271,12 +271,14 @@ export class DeerAnimator {
     lie.position.set(0, 0.07 * e, 0);
     // legs relax, slightly bent, sticking out
     for (const s of ["L", "R"]) {
-      B[`hum${s}`].rotation.x = B[`hum${s}`].rotation.x * (1 - e) + 0.25 * e;
-      B[`rad${s}`].rotation.x = B[`rad${s}`].rotation.x * (1 - e) - 0.35 * e;
-      B[`canF${s}`].rotation.x = B[`canF${s}`].rotation.x * (1 - e) + 0.2 * e;
-      B[`fem${s}`].rotation.x = B[`fem${s}`].rotation.x * (1 - e) - 0.3 * e;
-      B[`tib${s}`].rotation.x = B[`tib${s}`].rotation.x * (1 - e) + 0.25 * e;
-      B[`met${s}`].rotation.x = B[`met${s}`].rotation.x * (1 - e) - 0.1 * e;
+      // legs stretched out, a little bent, the top pair slightly forward
+      const top = (s === "L") === (this.deathSide < 0) ? 1 : 0;
+      B[`hum${s}`].rotation.x = B[`hum${s}`].rotation.x * (1 - e) + (-0.15 - 0.25 * top) * e;
+      B[`rad${s}`].rotation.x = B[`rad${s}`].rotation.x * (1 - e) - 0.12 * e;
+      B[`canF${s}`].rotation.x = B[`canF${s}`].rotation.x * (1 - e) + 0.08 * e;
+      B[`fem${s}`].rotation.x = B[`fem${s}`].rotation.x * (1 - e) + (0.1 - 0.2 * top) * e;
+      B[`tib${s}`].rotation.x = B[`tib${s}`].rotation.x * (1 - e) + 0.12 * e;
+      B[`met${s}`].rotation.x = B[`met${s}`].rotation.x * (1 - e) - 0.05 * e;
     }
     B.neck1.rotation.x = B.neck1.rotation.x * (1 - e) + 0.75 * e;
     B.neck1.rotation.y = B.neck1.rotation.y * (1 - e) - side * 0.5 * e;

@@ -114,7 +114,7 @@ export function buildSky(scene: THREE.Scene, opts: { azimuth: number; elevation:
   scene.add(hemi);
 
   const fogColor = new THREE.Color(0.68, 0.74, 0.82);
-  scene.fog = new THREE.FogExp2(fogColor, 0.00011);
+  scene.fog = new THREE.FogExp2(fogColor, 0.00022);
 
   return {
     sky, clouds, sun, hemi, sunDir, fogColor,

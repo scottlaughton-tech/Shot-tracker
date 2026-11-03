@@ -48,42 +48,82 @@ function drawNeedleTwig(g: CanvasRenderingContext2D, rnd: Rnd, x0: number, y0: n
 }
 
 function drawSpray(g: CanvasRenderingContext2D, rnd: Rnd, S: number, dark: [number, number, number], light: [number, number, number], needle: number, density = 1) {
-  // main branch from the left edge (attached to trunk) to the right (tip)
+  // A conifer branch seen from above/side: an irregular mass of twigs, each thick with short
+  // needles, darker toward the middle, with bright new growth at the tips.
   const y = S * 0.5;
-  const len = S * 0.92;
-  drawNeedleTwig(g, rnd, S * 0.03, y, 0, len, needle * 1.1, dark, light, 3, density);
-  const n = 9;
-  for (let i = 0; i < n; i++) {
-    const t = 0.12 + (i / n) * 0.8;
-    const bx = S * 0.03 + len * t;
-    const sl = S * 0.42 * Math.sin(Math.PI * Math.min(1, t * 1.05)) * (0.7 + rnd() * 0.35);
-    for (const side of [-1, 1]) {
-      const a = side * (0.75 + rnd() * 0.3);
-      drawNeedleTwig(g, rnd, bx, y, a, sl, needle, dark, light, 1.6, density);
+  const len = S * 0.94;
+  const tw = (x0: number, y0: number, a: number, l: number, depth: number, w: number) => {
+    const steps = 5;
+    let x = x0, yy = y0, ang = a;
+    const pts: [number, number, number][] = [];
+    for (let i = 0; i < steps; i++) {
+      ang += (rnd() - 0.5) * 0.25;
+      const nx = x + Math.cos(ang) * l / steps, ny = yy + Math.sin(ang) * l / steps + l * 0.012 * i; // slight droop
+      pts.push([x, yy, ang]);
+      x = nx; yy = ny;
     }
-  }
+    pts.push([x, yy, ang]);
+    // needles all along this twig
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [px, py, pa] = pts[i];
+      const [qx, qy] = pts[i + 1];
+      const n = Math.ceil((Math.hypot(qx - px, qy - py) / 2.0) / density);
+      for (let k = 0; k < n; k++) {
+        const t = k / n, bx = px + (qx - px) * t, by = py + (qy - py) * t;
+        const along = (i + t) / (pts.length - 1);
+        const nl = needle * (0.55 + 0.45 * Math.sin(Math.PI * Math.min(1, along * 1.2 + 0.1))) * (0.7 + rnd() * 0.5) * (depth ? 0.8 : 1);
+        for (const side of [-1, 1]) {
+          const na = pa + side * (0.7 + rnd() * 0.8);
+          const tip = along > 0.8;
+          g.strokeStyle = tip ? jitter(rnd, light, 0.3) : jitter(rnd, dark, 0.4);
+          g.lineWidth = 1.2 + rnd() * 0.9;
+          g.beginPath(); g.moveTo(bx, by); g.lineTo(bx + Math.cos(na) * nl, by + Math.sin(na) * nl); g.stroke();
+        }
+      }
+    }
+    // side twigs
+    if (depth < 2) {
+      const kids = depth === 0 ? 11 : 4;
+      for (let k = 0; k < kids; k++) {
+        const t = 0.1 + 0.85 * (k / kids) + (rnd() - 0.5) * 0.06;
+        const i = Math.min(pts.length - 1, Math.floor(t * (pts.length - 1)));
+        const [px, py, pa] = pts[i];
+        const shape = Math.sin(Math.PI * Math.min(1, t * 1.05)) * (0.6 + rnd() * 0.55);
+        const sl = l * (depth === 0 ? 0.52 : 0.4) * shape;
+        if (sl < needle) continue;
+        const side = k % 2 ? 1 : -1;
+        tw(px, py, pa + side * (0.75 + rnd() * 0.5), sl, depth + 1, w * 0.6);
+      }
+    }
+    g.strokeStyle = rgb(62, 46, 34, 0.8);
+    g.lineWidth = w;
+    g.beginPath(); g.moveTo(pts[0][0], pts[0][1]); for (const q of pts) g.lineTo(q[0], q[1]); g.stroke();
+  };
+  tw(S * 0.02, y, (rnd() - 0.5) * 0.1, len, 0, 3);
 }
 
 function drawPineTuft(g: CanvasRenderingContext2D, rnd: Rnd, S: number) {
-  // white pine: soft long needles in bundles along a gently upturned twig
-  const tufts = 14;
+  // white pine: soft, long blue-green needles in clumpy bundles along an upturned twig
+  g.strokeStyle = rgb(80, 60, 45); g.lineWidth = 3;
+  g.beginPath(); g.moveTo(S * 0.02, S * 0.56); g.quadraticCurveTo(S * 0.5, S * 0.56, S * 0.94, S * 0.44); g.stroke();
+  const tufts = 26;
   for (let k = 0; k < tufts; k++) {
-    const t = k / tufts;
-    const cx = S * (0.1 + 0.8 * t), cy = S * (0.55 - 0.1 * t) + (rnd() - 0.5) * S * 0.12;
-    const r = S * (0.12 + 0.12 * Math.sin(Math.PI * t)) * (0.8 + rnd() * 0.4);
-    for (let i = 0; i < 70; i++) {
-      const a = -Math.PI * 0.5 + (rnd() - 0.5) * Math.PI * 1.7;
-      const l = r * (0.6 + rnd() * 0.5);
-      g.strokeStyle = jitter(rnd, rnd() < 0.3 ? [120, 145, 128] : [70, 98, 80], 0.3, 0.95);
-      g.lineWidth = 1 + rnd() * 0.5;
+    const t = rnd();
+    const cx = S * (0.08 + 0.86 * t), cy = S * (0.56 - 0.1 * t) + (rnd() - 0.5) * S * 0.1;
+    const r = S * (0.08 + 0.1 * Math.sin(Math.PI * t)) * (0.7 + rnd() * 0.5);
+    const shade = rnd();
+    for (let i = 0; i < 45; i++) {
+      const a = -Math.PI * 0.5 + (rnd() - 0.5) * Math.PI * 1.6;
+      const l = r * (0.55 + rnd() * 0.5);
+      const base: [number, number, number] = shade < 0.35 ? [52, 74, 62] : shade < 0.8 ? [72, 98, 84] : [104, 130, 112];
+      g.strokeStyle = jitter(rnd, base, 0.25, 0.9);
+      g.lineWidth = 0.9 + rnd() * 0.5;
       g.beginPath();
       g.moveTo(cx, cy);
-      g.quadraticCurveTo(cx + Math.cos(a) * l * 0.5, cy + Math.sin(a) * l * 0.5 + l * 0.12, cx + Math.cos(a) * l, cy + Math.sin(a) * l + l * 0.25);
+      g.quadraticCurveTo(cx + Math.cos(a) * l * 0.5, cy + Math.sin(a) * l * 0.5 + l * 0.15, cx + Math.cos(a) * l, cy + Math.sin(a) * l + l * 0.3);
       g.stroke();
     }
   }
-  g.strokeStyle = rgb(80, 60, 45); g.lineWidth = 3;
-  g.beginPath(); g.moveTo(S * 0.02, S * 0.56); g.quadraticCurveTo(S * 0.5, S * 0.55, S * 0.92, S * 0.45); g.stroke();
 }
 
 function drawCedar(g: CanvasRenderingContext2D, rnd: Rnd, S: number) {
@@ -335,7 +375,11 @@ export function coverageMipmapTexture(src: HTMLCanvasElement, cutoff: number): T
   };
   const target: number[] = [];
   const cs0 = W0 / cells;
-  for (let i = 0; i < cells * cells; i++) target.push(cover(L0, (i % cells) * cs0, Math.floor(i / cells) * cs0, cs0, 1));
+  // bare twigs should thin to a see-through haze in the distance, needles stay solid
+  const keep: Record<number, number> = { [Card.TwigMaple]: 0.5, [Card.TwigFine]: 0.5, [Card.Dogwood]: 0.7, [Card.Alder]: 0.7, [Card.Sumac]: 0.7, [Card.Goldenrod]: 0.8 };
+  // (cells are counted from the bottom here because the rows were flipped)
+  const cardOf = (i: number) => (cells - 1 - Math.floor(i / cells)) * cells + (i % cells);
+  for (let i = 0; i < cells * cells; i++) target.push(cover(L0, (i % cells) * cs0, Math.floor(i / cells) * cs0, cs0, 1) * (keep[cardOf(i)] ?? 1));
   // build the chain: alpha-weighted colour averages, then restore each cell's alpha-test coverage
   const levels: Level[] = [L0];
   while (levels[levels.length - 1].w > 1) {

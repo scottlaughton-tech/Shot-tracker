@@ -39,6 +39,10 @@ test("too far back: liver, then gut, then the hindquarter", () => {
   assert.equal(side(0.8, -0.48), "ham");
 });
 
+test("a shot through the middle of the shoulder takes the lungs", () => {
+  assert.equal(side(0.84, 0.4), "lungs");
+});
+
 test("legs only wound", () => {
   assert.equal(side(0.25, 0.345), "leg");
   assert.equal(side(0.3, -0.46), "leg");

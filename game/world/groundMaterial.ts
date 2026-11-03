@@ -84,7 +84,9 @@ vec3 photo2(sampler2D t, vec2 p, float s, float mixer) {
     if (open > 0.01 && tall < 0.99) {
       // hay field: dry ground, a little greener, with mowing rows
       vec3 g = photo2(uGround, p, 0.25, nMid.b);
-      hayC = g * vec3(1.08, 1.06, 0.82) * mix(0.88, 1.1, nMid.r);
+      // November stubble: straw and tan with grey patches, only a hint of green
+      hayC = mix(g * vec3(1.12, 0.98, 0.72), vec3(0.47, 0.39, 0.25), 0.4) * mix(0.84, 1.12, nMid.r);
+      hayC = mix(hayC, hayC * vec3(0.9, 0.92, 0.95), smoothstep(0.55, 0.8, nMid.a));
       hayC *= 0.9 + 0.1 * sin(p.x * 0.9 + nBig.g * 6.0);
     }
     if (open < 0.99 || brush > 0.01) {

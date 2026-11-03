@@ -117,8 +117,9 @@ export const ORGANS: Organ[] = [
   // heart: low in the chest, just behind the front leg
   { zone: "heart", prim: ell([0.01, 0.675, 0.33], [0.055, 0.075, 0.065], "spine2", 0, "") },
   // lungs fill the upper rib cage
-  { zone: "lungs", prim: ell([0.06, 0.82, 0.2], [0.085, 0.165, 0.2], "spine2", 0, "") },
-  { zone: "lungs", prim: ell([-0.06, 0.82, 0.2], [0.085, 0.165, 0.2], "spine2", 0, "") },
+  // (they reach forward under the shoulder blade, so a shoulder shot usually takes the lungs too)
+  { zone: "lungs", prim: ell([0.06, 0.82, 0.22], [0.085, 0.165, 0.235], "spine2", 0, "") },
+  { zone: "lungs", prim: ell([-0.06, 0.82, 0.22], [0.085, 0.165, 0.235], "spine2", 0, "") },
   { zone: "liver", prim: ell([-0.02, 0.77, -0.01], [0.13, 0.11, 0.075], "spine1", 0, "") },
   { zone: "paunch", prim: ell([0, 0.75, -0.18], [0.15, 0.17, 0.2], "spine1", 0, "") },
   // spine along the top of the back and up the neck

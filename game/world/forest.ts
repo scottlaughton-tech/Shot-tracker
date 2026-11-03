@@ -275,13 +275,7 @@ export class Forest {
 
   /** Render every model once, from the south, into albedo + normal atlases. */
   private bakeImpostors(atlas: THREE.Texture, barks: Map<BarkKind, BarkLook>) {
-    const W = 2048, H = 2048, CELL_H = 384;
-    const mk = (srgb: boolean) => {
-      const rt = new THREE.WebGLRenderTarget(W, H, { samples: 4, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter });
-      if (srgb) rt.texture.colorSpace = THREE.SRGBColorSpace;
-      return rt;
-    };
-    const albedoRT = mk(true), normalRT = mk(false);
+    const W = 2048, CELL_H = 384;
     const scene = new THREE.Scene();
     const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
     cam.position.set(0, 0, 100);
@@ -301,6 +295,15 @@ export class Forest {
       layout.push({ x: px, y: py, w: cw, h: CELL_H, box });
       px += cw + 2;
     }
+    // only as tall as needed; no multisampling (it would keep ~4× the memory allocated on phones)
+    const H = py + CELL_H;
+    const mk = (srgb: boolean) => {
+      const rt = new THREE.WebGLRenderTarget(W, H, { samples: 0, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter });
+      if (srgb) rt.texture.colorSpace = THREE.SRGBColorSpace;
+      return rt;
+    };
+    const albedoRT = mk(true), normalRT = mk(false);
+    if (location.search.includes("debug")) console.log(`[t]   impostor atlas ${W}x${H}`);
     const rd = this.renderer;
     const prevTone = rd.toneMapping;
     rd.toneMapping = THREE.NoToneMapping;

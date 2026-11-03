@@ -141,6 +141,19 @@ export function snortSound(delay: number, range: number) {
   if (Math.random() < 0.6) burst(t + 0.9, 0.35, g * 0.8, "bandpass", 1000, 1.2, 0.5, 6);
 }
 
+/** A rutting buck's grunt: short, low, guttural. */
+export function gruntSound(delay: number, range: number) {
+  if (!ctx) return;
+  const g = Math.max(0.02, Math.min(0.25, 25 / range));
+  const t = ctx.currentTime + delay;
+  const n = 1 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < n; i++) {
+    const at = t + i * 0.55;
+    tone(at, 105, 82, 0.32, g, "sawtooth", 0.5);
+    burst(at, 0.3, g * 0.6, "lowpass", 320, 0.8, 0.5, 8);
+  }
+}
+
 // ---------- ambience ----------
 
 export function startAmbience() {

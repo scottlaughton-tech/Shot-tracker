@@ -123,7 +123,7 @@ export class Game {
       await new Promise((r) => setTimeout(r, 0));
     };
     await step(0.05, "Sky");
-    this.sky = buildSky(this.scene, { azimuth: 222, elevation: 13 });
+    this.sky = buildSky(this.scene, { azimuth: 236, elevation: 12 }); // early-November late afternoon, WSW
     await step(0.08, "Textures");
     this.photos = await loadPhotos(this.renderer.capabilities.getMaxAnisotropy(), (d, n) => onProgress(0.08 + 0.1 * (d / n), "Textures"));
     await step(0.18, "Ground");
@@ -144,9 +144,38 @@ export class Game {
     this.rocks = new Rocks(this.terrain.heightAt, this.photos);
     this.scene.add(this.rocks.group);
     console.log(`[g] forest: ${this.forest.count} trees, ${this.forest.models.length} models`);
+    this.addStandRail();
     await step(0.92, "Deer");
     this.deerAsset = buildDeerAsset(noise);
     await step(1, "Ready");
+  }
+
+  /** The ladder stand's padded shooting rail across the bottom of the open view (not in the scope). */
+  private addStandRail() {
+    const g = new THREE.Group();
+    const pad = new THREE.MeshStandardMaterial({ color: "#3b3a2c", roughness: 0.95 });
+    const steel = new THREE.MeshStandardMaterial({ color: "#2a2b27", roughness: 0.6, metalness: 0.4 });
+    const rail = new THREE.Mesh(new THREE.CapsuleGeometry(0.045, 1.5, 6, 12), pad);
+    rail.rotation.z = Math.PI / 2;
+    rail.position.set(0, -0.62, -0.78);
+    // stitched seams on the padding: a few darker rings
+    for (let i = -3; i <= 3; i++) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.046, 0.004, 6, 16), steel);
+      ring.rotation.y = Math.PI / 2;
+      ring.position.set(i * 0.22, -0.62, -0.78);
+      g.add(ring);
+    }
+    for (const x of [-0.78, 0.78]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.9, 8), steel);
+      post.position.set(x, -1.05, -0.7);
+      post.rotation.x = -0.25;
+      g.add(post);
+    }
+    g.add(rail);
+    g.traverse((o) => { o.layers.set(1); });
+    g.position.copy(this.eye);
+    this.scene.add(g);
+    this.wideCam.layers.enable(1);
   }
 
   resize() {
@@ -309,7 +338,7 @@ export class Game {
           const range = p.distanceTo(this.eye);
           if (range < 450) impactSound(range / 337, range);
           // landed short of the buck it was aimed at: that's a low miss
-          if (bl.aimed && bl.miss === null) bl.miss = p.distanceTo(this.eye) < bl.aimedDist - 3 ? "low – hit the dirt in front of him" : "";
+          if (bl.aimed && bl.miss === null) bl.miss = p.distanceTo(this.eye) < bl.aimedDist - 3 ? `low – hit the dirt in front of him. He was ${Math.round(bl.aimedDist / 5) * 5} m away` : "";
           this.hunt?.impact(p, bl.miss ?? "");
         } else if (bl.s.t > 4) {
           bl.alive = false;
@@ -338,7 +367,8 @@ export class Game {
       if (Math.abs(across) > 0.5) parts.push(`${fmt(lat)} ${Math.sign(lat) === Math.sign(across) ? "ahead" : "behind"}`);
       else parts.push(`${fmt(lat)} ${lat > 0 ? "right" : "left"}`);
     }
-    return parts.join(" · ");
+    const range = Math.round(chest.distanceTo(this.eye) / 5) * 5;
+    return `${parts.join(" · ")}${parts.length ? " – " : ""}he was ${range} m away`;
   }
 
   // ---------- hunt ----------

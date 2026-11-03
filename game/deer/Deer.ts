@@ -8,7 +8,7 @@ import { nearestCover, type P2 } from "./routes";
 import { primDist, type Prim } from "./sdf";
 import { primaryZone, ZONES, type Gait, type Outcome, type Zone } from "../scoring";
 import { SPEED_OF_SOUND } from "../ballistics";
-import { snortSound } from "../engine/audio";
+import { gruntSound, snortSound } from "../engine/audio";
 
 export type DeerState = "travel" | "feed" | "look" | "alert" | "flee" | "kick" | "wounded" | "dying" | "dead" | "gone";
 
@@ -47,6 +47,7 @@ export class Deer {
   private antlerSegs: [THREE.Vector3, THREE.Vector3, number][];
   private pendingSounds: { at: number; fn: () => void }[] = [];
   private clock = 0;
+  private gruntT = 4 + Math.random() * 10;
 
   constructor(readonly id: number, asset: DeerAsset, readonly rack: Rack, route: P2[], private world: World, private events: DeerEvents, rnd: () => number) {
     this.rig = makeRig(asset);
@@ -114,6 +115,13 @@ export class Deer {
       case "travel":
         target = this.travelSpeed;
         this.nextStop -= dt;
+        // rutting bucks grunt now and then while they cruise
+        this.gruntT -= dt;
+        if (this.gruntT <= 0) {
+          this.gruntT = 12 + Math.random() * 25;
+          const dist = this.pos.distanceTo(this.world.eye);
+          if (dist < 320 && this.travelSpeed < 5 && Math.random() < 0.6) gruntSound(dist / SPEED_OF_SOUND, dist);
+        }
         if (this.nextStop <= 0 && this.wp > 2 && this.wp < this.route.length - 1) {
           const r = Math.random();
           this.state = r < 0.55 ? "feed" : "look";

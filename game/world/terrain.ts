@@ -5,12 +5,14 @@ import { buildGroundCache, type Ground, sampleGround, sampleGroundFast } from ".
 import { smoothstep } from "./noise";
 
 const R0 = 3;           // first ring, m
-const RATIO = 1.02;     // each ring is 2% farther than the last...
-const R_FAR = 1700;     // ...until the far bush, where rings spread out faster
+const R_NEAR = 60;      // under the stand rings can be coarser (the ground there is out of view)
+const RATIO_NEAR = 1.035;
+const RATIO = 1.02;     // each ring 2% farther than the last across the field...
+const R_FAR = 1700;     // ...then the far bush, where rings spread out faster
 const RATIO_FAR = 1.04;
 const R_MAX = 9000;
 const ANG = (62 * Math.PI) / 180; // half-width of the covered wedge
-const DA = (0.25 * Math.PI) / 180;
+const DA = (0.3 * Math.PI) / 180;
 
 export type Terrain = {
   mesh: THREE.Mesh;
@@ -21,7 +23,7 @@ export type Terrain = {
 export function buildTerrain(material: THREE.Material): Terrain {
   buildGroundCache();
   const radii: number[] = [];
-  for (let r = R0; r < R_MAX * RATIO_FAR; r *= r < R_FAR ? RATIO : RATIO_FAR) radii.push(r);
+  for (let r = R0; r < R_MAX * RATIO_FAR; r *= r < R_NEAR ? RATIO_NEAR : r < R_FAR ? RATIO : RATIO_FAR) radii.push(r);
   const rings = radii.length;
   const cols = Math.round((2 * ANG) / DA) + 1;
   const n = rings * cols;
@@ -68,11 +70,11 @@ export function buildTerrain(material: THREE.Material): Terrain {
   mesh.receiveShadow = true;
   mesh.frustumCulled = false;
 
-  const lnRatio = Math.log(RATIO), lnFar = Math.log(RATIO_FAR);
-  const iFar = radii.findIndex((r) => r >= R_FAR);
+  // fractional ring index: binary search, then linear between rings (exactly how the mesh is built)
   const ringOf = (r: number) => {
-    if (r < radii[iFar]) return Math.log(r / R0) / lnRatio;
-    return iFar + Math.log(r / radii[iFar]) / lnFar;
+    let lo = 0, hi = rings - 1;
+    while (hi - lo > 1) { const m = (lo + hi) >> 1; if (radii[m] <= r) lo = m; else hi = m; }
+    return lo + Math.min(1, Math.max(0, (r - radii[lo]) / (radii[hi] - radii[lo])));
   };
   const heightAt = (x: number, z: number) => {
     const r = Math.max(R0, Math.hypot(x, z));
