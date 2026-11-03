@@ -45,7 +45,34 @@ export default function App() {
   const [picking, setPicking] = useState(false);
   const [picked, setPicked] = useState<Picked>(null);
   const [center, setCenter] = useState<{ lat: number; lon: number } | null>(null);
-  function openForm(k: ReportKind) { setPicked(null); setPicking(false); setFormKind(k); }
+  function openForm(k: ReportKind) { setPicked(null); setPicking(false); setRuler(null); setFormKind(k); }
+
+  // "My location" button
+  const [goto, setGoto] = useState<{ lat: number; lon: number; n: number } | null>(null);
+  const [locating, setLocating] = useState(false);
+  function locateMe() {
+    if (me) return setGoto((g) => ({ lat: me.lat, lon: me.lon, n: (g?.n ?? 0) + 1 }));
+    if (!("geolocation" in navigator)) return alert("This browser can't share your location.");
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        setLocating(false);
+        setMe({ lat: p.coords.latitude, lon: p.coords.longitude, accuracy: p.coords.accuracy });
+        setGoto((g) => ({ lat: p.coords.latitude, lon: p.coords.longitude, n: (g?.n ?? 0) + 1 }));
+      },
+      (err) => {
+        setLocating(false);
+        alert(err.code === 1
+          ? "Location is blocked for this site. Allow it in your browser settings (on iPhone: Settings → Safari → Location)."
+          : "Couldn't get a GPS fix. Try again in a moment.");
+      },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 10000 },
+    );
+  }
+
+  // Ruler: null = off, otherwise the points tapped so far
+  const [ruler, setRuler] = useState<[number, number][] | null>(null);
+  const rulerTotal = (ruler ?? []).reduce((t, p, i, a) => (i ? t + distance(a[i - 1][0], a[i - 1][1], p[0], p[1]) : 0), 0);
   const [panelOpen, setPanelOpen] = useState(false);
   const [focus, setFocus] = useState<{ key: string; n: number } | null>(null);
   const [offline, setOffline] = useState(false);
@@ -291,10 +318,45 @@ export default function App() {
 
       <div className="main">
         <div className="map-wrap">
-          {!picking && <button className="blind-fab" onClick={() => openForm("blind")}>🟧 Add blind</button>}
+          {!picking && !ruler && <button className="blind-fab" onClick={() => openForm("blind")}>🟧 Add blind</button>}
           <ShotMap shots={mapShots} sightings={mapDeer} signs={mapSigns} blinds={mapBlinds} me={me} focus={focus}
             pickStart={picking ? (picked ?? (me ? { lat: me.lat, lon: me.lon } : null)) : undefined}
-            onCenter={(lat, lon) => setCenter({ lat, lon })} />
+            onCenter={(lat, lon) => setCenter({ lat, lon })}
+            goto={goto}
+            ruler={ruler ?? undefined}
+            onRulerAdd={(lat, lon) => setRuler((r) => (r ? [...r, [lat, lon]] : r))} />
+          {!picking && (
+            <div className="map-tools">
+              <button className={`tool ${locating ? "busy" : ""}`} onClick={locateMe} aria-label="Show my location" title="My location">
+                {locating ? "…" : "📍"}
+              </button>
+              <button className={`tool ${ruler ? "active" : ""}`} onClick={() => setRuler((r) => (r ? null : []))}
+                aria-pressed={!!ruler} aria-label="Measure distance" title="Ruler">📏</button>
+            </div>
+          )}
+          {ruler && !picking && (
+            <>
+              {ruler.length === 0 && (
+                <div className="pick-top">
+                  <b>📏 Tap the map</b> to add points along the path you want to measure.
+                </div>
+              )}
+              <div className="ruler-bar">
+                <div className="ruler-total">
+                  <span className="ruler-num">{formatDistance(rulerTotal)}</span>
+                  <span className="muted">{ruler.length} point{ruler.length === 1 ? "" : "s"}</span>
+                </div>
+                <div className="row gap">
+                  {ruler.length === 0 && me && (
+                    <button className="btn" onClick={() => setRuler([[me.lat, me.lon]])}>Start from me</button>
+                  )}
+                  {ruler.length > 0 && <button className="btn" onClick={() => setRuler((r) => (r ? r.slice(0, -1) : r))}>↶ Undo</button>}
+                  {ruler.length > 1 && <button className="btn" onClick={() => setRuler([])}>Clear</button>}
+                  <button className="btn primary" onClick={() => setRuler(null)}>Done</button>
+                </div>
+              </div>
+            </>
+          )}
           {picking && (
             <>
               <div className="crosshair" aria-hidden><span /></div>
@@ -355,7 +417,7 @@ export default function App() {
         </button>
       )}
 
-      <div className="fabs" style={picking ? { display: "none" } : undefined}>
+      <div className="fabs" style={picking || ruler ? { display: "none" } : undefined}>
         <button className="report-fab" onClick={() => openForm("shot")}>🔊 Heard a shot</button>
         <button className="deer-fab" onClick={() => openForm("deer")} aria-label="Report a deer sighting">🦌 Deer</button>
         <button className="sign-fab" onClick={() => openForm("sign")} aria-label="Mark deer sign">🍂 Sign</button>
@@ -367,7 +429,7 @@ export default function App() {
           initialKind={formKind}
           onClose={() => { setFormKind(null); setPicking(false); }}
           picked={picked}
-          onStartPick={() => setPicking(true)}
+          onStartPick={() => { setRuler(null); setPicking(true); }}
           hidden={picking}
           onSaved={(id) => { seen.current?.add(id); setFormKind(null); load(); }}
         />

@@ -51,6 +51,10 @@ Until steps 2–4 are done, the site shows a warning (no passcode, or reports ar
   Drag the map (or tap a spot) to put the crosshair on the spot; the readout shows how far and which
   way it is from you. Tap **✓ Use this spot** to return to the form. For deer, a dotted line shows
   where it was spotted from.
+- **📍 My location** (right side of the map): jumps the map to where you are.
+- **📏 Ruler:** tap it, then tap the map to add points along a path. Each point shows the running
+  distance and the bar at the bottom shows the total. **Start from me** begins at your position,
+  **↶ Undo** removes the last point, **Done** closes the ruler.
 - **Alerts:** when someone else reports a shot or a deer, a pop-up appears (Android also vibrates).
   Tap 🔕 in the top bar to also play a beep.
 - **☰ Layers panel:**

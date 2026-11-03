@@ -87,11 +87,33 @@ function PickMode({ start, onCenter }: { start: { lat: number; lon: number } | n
   return null;
 }
 
-export default function ShotMap({ shots, sightings, signs, blinds, me, focus, pickStart, onCenter }: {
+/** Flies to a spot when `goto.n` changes (used by the "My location" button). */
+function GoTo({ goto }: { goto: { lat: number; lon: number; n: number } | null }) {
+  const map = useMap();
+  const last = useRef(0);
+  useEffect(() => {
+    if (!goto || goto.n === last.current) return;
+    last.current = goto.n;
+    map.flyTo([goto.lat, goto.lon], Math.max(map.getZoom(), 16), { duration: 0.8 });
+  }, [goto, map]);
+  return null;
+}
+
+/** Ruler: every tap on the map adds a point. */
+function RulerMode({ onAdd }: { onAdd: (lat: number, lon: number) => void }) {
+  useMapEvents({ click: (e) => onAdd(e.latlng.lat, e.latlng.lng) });
+  return null;
+}
+
+export default function ShotMap({ shots, sightings, signs, blinds, me, focus, pickStart, onCenter, goto, ruler, onRulerAdd }: {
   shots: ShotView[]; sightings: Sighting[]; signs: Sign[]; blinds: Blind[]; me: Me; focus: { key: string; n: number } | null;
   /** set (even to null) while the crosshair is open */
   pickStart?: { lat: number; lon: number } | null;
   onCenter?: (lat: number, lon: number) => void;
+  goto?: { lat: number; lon: number; n: number } | null;
+  /** ruler points; undefined = ruler off */
+  ruler?: [number, number][];
+  onRulerAdd?: (lat: number, lon: number) => void;
 }) {
   const icons = useMemo(() => new Map(shots.map((s) => [s.key, estimateIcon(s.color, String(s.index + 1))])), [shots]);
 
@@ -122,6 +144,9 @@ export default function ShotMap({ shots, sightings, signs, blinds, me, focus, pi
       </LayersControl>
 
       {pickStart !== undefined && onCenter && <PickMode start={pickStart} onCenter={onCenter} />}
+      <GoTo goto={goto ?? null} />
+      {ruler && onRulerAdd && <RulerMode onAdd={onRulerAdd} />}
+      {ruler && ruler.length > 0 && <RulerLine pts={ruler} />}
       <FitBounds shots={shots} sightings={sightings} signs={signs} blinds={blinds} me={me} focus={focus} />
 
       {blinds.map((x) => (
@@ -299,3 +324,28 @@ const blindIcon = L.divIcon({
   className: "", iconSize: [22, 22], iconAnchor: [11, 11],
   html: `<div class="blind-icon">▲</div>`,
 });
+
+/** The measured line: yellow-on-black so it shows on topo and satellite, with running totals at each point. */
+function RulerLine({ pts }: { pts: [number, number][] }) {
+  let total = 0;
+  const labels = pts.map((p, i) => {
+    if (i > 0) total += distance(pts[i - 1][0], pts[i - 1][1], p[0], p[1]);
+    return i === 0 ? "Start" : formatDistance(total);
+  });
+  return (
+    <>
+      {pts.length > 1 && (
+        <>
+          <Polyline positions={pts} interactive={false} pathOptions={{ color: "#111", weight: 7, opacity: 0.8 }} />
+          <Polyline positions={pts} interactive={false} pathOptions={{ color: "#ffd43b", weight: 3, dashArray: "10 8" }} />
+        </>
+      )}
+      {pts.map((p, i) => (
+        <CircleMarker key={i} center={p} radius={6} interactive={false}
+          pathOptions={{ color: "#111", weight: 2, fillColor: "#ffd43b", fillOpacity: 1 }}>
+          <Tooltip permanent direction="top" offset={[0, -6]} className="ruler-label">{labels[i]}</Tooltip>
+        </CircleMarker>
+      ))}
+    </>
+  );
+}
