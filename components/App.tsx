@@ -6,7 +6,7 @@ import { colorFor, DEER_STYLE, deerText, SIGN_COLOR, SIGN_STYLE, BLIND_COLOR, BL
 import { beep, unlockAudio, vibrate } from "@/lib/alert";
 import { ago } from "@/lib/time";
 import ReportForm, { type ReportKind } from "./ReportForm";
-import ShotList from "./ShotList";
+import ShotList, { type LayerKey, type Layers } from "./ShotList";
 
 const ShotMap = dynamic(() => import("./ShotMap"), {
   ssr: false,
@@ -21,12 +21,21 @@ const INTERVALS = [0.5, 1, 2, 3, 5, 10, 15, 30];
 export default function App() {
   const [reports, setReports] = useState<Report[]>([]);
   const [sightings, setSightings] = useState<Sighting[]>([]);
-  const [showDeer, setShowDeer] = useState(true);
+  // Which layers are on the map (remembered per phone).
+  const [layers, setLayers] = useState<Layers>({ shots: true, deer: true, sign: true, blinds: true });
+  useEffect(() => {
+    try { const v = JSON.parse(localStorage.getItem("st:layers") ?? "null"); if (v) setLayers((l) => ({ ...l, ...v })); } catch {}
+  }, []);
+  function setLayer(k: LayerKey, on: boolean) {
+    setLayers((l) => {
+      const n = { ...l, [k]: on };
+      try { localStorage.setItem("st:layers", JSON.stringify(n)); } catch {}
+      return n;
+    });
+  }
   const [deerRange, setDeerRange] = useState<"today" | "all">("today");
   const [signs, setSigns] = useState<Sign[]>([]);
-  const [showSign, setShowSign] = useState(true);
   const [blinds, setBlinds] = useState<Blind[]>([]);
-  const [showBlind, setShowBlind] = useState(true);
   const [intervalMin, setIntervalMin] = useState(2);
   const [hasDatabase, setHasDatabase] = useState(true);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
@@ -178,23 +187,25 @@ export default function App() {
     () => sightings.filter((d) => deerRange === "all" || d.time >= midnight).sort((a, b) => b.time - a.time),
     [sightings, deerRange, midnight],
   );
-  const mapDeer = showDeer ? rangedDeer : [];
+  const mapShots = layers.shots ? visible : [];
+  const mapDeer = layers.deer ? rangedDeer : [];
 
   const sortedSigns = useMemo(() => [...signs].sort((a, b) => b.time - a.time), [signs]);
-  const mapSigns = showSign ? sortedSigns : [];
+  const mapSigns = layers.sign ? sortedSigns : [];
   const sortedBlinds = useMemo(() => [...blinds].sort((a, b) => a.title.localeCompare(b.title)), [blinds]);
-  const mapBlinds = showBlind ? sortedBlinds : [];
+  const mapBlinds = layers.blinds ? sortedBlinds : [];
 
   function focusOn(key: string) {
     if (key.startsWith("blind:")) {
-      setShowBlind(true);
+      setLayer("blinds", true);
     } else if (key.startsWith("sign:")) {
-      setShowSign(true);
+      setLayer("sign", true);
     } else if (key.startsWith("sight:")) {
-      setShowDeer(true);
+      setLayer("deer", true);
       const d = sightings.find((x) => x.id === key);
       if (d && d.time < midnight) setDeerRange("all");
     } else {
+      setLayer("shots", true);
       setHidden((h) => { const n = new Set(h); n.delete(key); return n; });
     }
     setFocus((f) => ({ key, n: (f?.n ?? 0) + 1 }));
@@ -264,7 +275,7 @@ export default function App() {
           {soundOn ? "🔔" : "🔕"}
         </button>
         <button className="btn small shots-btn" onClick={() => setPanelOpen((o) => !o)}>
-          List
+          ☰ Layers
         </button>
       </header>
 
@@ -276,37 +287,33 @@ export default function App() {
       <div className="main">
         <div className="map-wrap">
           <button className="blind-fab" onClick={() => setFormKind("blind")}>🟧 Add blind</button>
-          <ShotMap shots={visible} sightings={mapDeer} signs={mapSigns} blinds={mapBlinds} me={me} focus={focus} />
+          <ShotMap shots={mapShots} sightings={mapDeer} signs={mapSigns} blinds={mapBlinds} me={me} focus={focus} />
         </div>
         <aside className={`panel ${panelOpen ? "open" : ""}`}>
           <ShotList
-            shots={shots}
-            hidden={hidden}
             me={me}
-            onToggle={toggle}
-            onShowAll={() => setHidden(new Set())}
-            onHideAll={() => setHidden(new Set(shots.map((s) => s.key)))}
-            onOnlyLatest={() => setHidden(new Set(shots.slice(0, -1).map((s) => s.key)))}
+            layers={layers}
+            onLayer={setLayer}
             onFocus={(key) => { focusOn(key); setPanelOpen(false); }}
             onDelete={remove}
-            onClearAll={clearAll}
+            onClose={() => setPanelOpen(false)}
+            shots={shots}
+            hidden={hidden}
+            onToggleShot={toggle}
+            onShowAll={() => { setLayer("shots", true); setHidden(new Set()); }}
+            onHideAll={() => setHidden(new Set(shots.map((s) => s.key)))}
+            onOnlyLatest={() => { setLayer("shots", true); setHidden(new Set(shots.slice(0, -1).map((s) => s.key))); }}
+            onClearShots={clearAll}
             sightings={rangedDeer}
             totalSightings={sightings.length}
-            showDeer={showDeer}
-            onShowDeer={setShowDeer}
             deerRange={deerRange}
             onDeerRange={setDeerRange}
             onClearDeer={clearDeer}
             signs={sortedSigns}
-            showSign={showSign}
-            onShowSign={setShowSign}
             onClearSigns={clearSigns}
             blinds={sortedBlinds}
-            showBlind={showBlind}
-            onShowBlind={setShowBlind}
-            onClearBlinds={clearBlinds}
             onAddBlind={() => { setPanelOpen(false); setFormKind("blind"); }}
-            onClose={() => setPanelOpen(false)}
+            onClearBlinds={clearBlinds}
           />
         </aside>
       </div>

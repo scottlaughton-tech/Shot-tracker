@@ -46,11 +46,14 @@ Until steps 2–4 are done, the site shows a warning (no passcode, or reports ar
   Give it a name, pick tree stand / ladder stand / ground blind / box blind / other, and stand at it
   (or type coordinates). Blinds show as orange squares with their name always visible.
 - **Clearing:** shots, deer sightings, deer sign and blinds each have their own "Clear all" button
-  at the bottom of their section in the list panel.
+  (tap **Edit** in the Layers panel, then look at the bottom of that tab).
 - **Alerts:** when someone else reports a shot or a deer, a pop-up appears (Android also vibrates).
   Tap 🔕 in the top bar to also play a beep.
-- **List panel:** tick or untick shots to show or hide their lines, *Zoom* to one, or delete
-  a mistaken report.
+- **☰ Layers panel:**
+  - Top: four big switches (**Shots, Deer, Sign, Blinds**) turn each layer on or off on the map with one tap.
+  - Below: tabs show one detailed list at a time. Tap a row to zoom to it. On the Shots tab, tap the
+    colored dot to show or hide one shot's lines, or ▾ to see who reported it.
+  - Deleting is locked until you tap **Edit**. Then 🗑 buttons and **Clear all** appear.
 - **Group** (top bar): how many minutes apart reports can be and still count as one shot.
   This setting is shared with the whole party.
 
