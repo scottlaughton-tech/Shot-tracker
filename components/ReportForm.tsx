@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { bearingTo, compassPoint, distance, formatDistance, norm360 } from "@/lib/geo";
 import { declinationAt } from "@/lib/declination";
+import { startCompass, useHeading } from "@/lib/compass";
 import { BLIND_STYLE, SIGN_STYLE } from "@/lib/colors";
 import type { BlindType, SignType } from "@/lib/geo";
 import type { Me } from "./App";
@@ -20,61 +21,25 @@ function save(key: string, v: string) {
   try { localStorage.setItem(key, v); } catch {}
 }
 
-// ---------- Phone compass ----------
-type OrientationEvt = DeviceOrientationEvent & { webkitCompassHeading?: number };
-
+// ---------- Phone compass (shared with the quick shot screen and the map arrow) ----------
 function useCompass() {
-  const [heading, setHeading] = useState<number | null>(null);
+  const live = useHeading();
   const [error, setError] = useState("");
   const [running, setRunning] = useState(false);
-  const smooth = useRef<{ s: number; c: number } | null>(null);
-  const cleanup = useRef<() => void>(() => {});
-
   async function start() {
     setError("");
-    const DOE = (window as unknown as { DeviceOrientationEvent?: { requestPermission?: () => Promise<string> } })
-      .DeviceOrientationEvent;
-    if (!DOE) return setError("This device has no compass sensor. Type the bearing instead.");
-    try {
-      if (typeof DOE.requestPermission === "function") {
-        const r = await DOE.requestPermission(); // iPhone asks permission here
-        if (r !== "granted") return setError("Compass permission was denied. Type the bearing instead.");
-      }
-    } catch {
-      return setError("Couldn't access the compass. Type the bearing instead.");
-    }
-
-    const handler = (e: Event) => {
-      const ev = e as OrientationEvt;
-      let h: number | null = null;
-      if (typeof ev.webkitCompassHeading === "number") h = ev.webkitCompassHeading; // iOS (magnetic)
-      else if (ev.absolute && ev.alpha != null) {
-        h = 360 - ev.alpha; // Android (magnetic)
-        h += (screen.orientation?.angle ?? 0);
-      }
-      if (h == null || isNaN(h)) return;
-      const r = (h * Math.PI) / 180;
-      const prev = smooth.current;
-      const s = prev ? prev.s * 0.8 + Math.sin(r) * 0.2 : Math.sin(r);
-      const c = prev ? prev.c * 0.8 + Math.cos(r) * 0.2 : Math.cos(r);
-      smooth.current = { s, c };
-      setHeading(norm360((Math.atan2(s, c) * 180) / Math.PI));
-    };
-    const evName = "ondeviceorientationabsolute" in window ? "deviceorientationabsolute" : "deviceorientation";
-    window.addEventListener(evName, handler);
-    cleanup.current = () => window.removeEventListener(evName, handler);
+    const r = await startCompass(); // iPhone asks permission here (must be from a tap)
+    if (r === "unsupported") return setError("This device has no compass sensor. Type the bearing instead.");
     setRunning(true);
-    window.setTimeout(() => {
-      if (smooth.current == null) setError("No compass readings. Your phone or browser may not support it. Type the bearing instead.");
-    }, 3000);
+    if (r === "denied") setError("Compass permission was denied. Type the bearing instead.");
   }
-
-  function stop() {
-    cleanup.current();
-    setRunning(false);
-  }
-  useEffect(() => () => cleanup.current(), []);
-  return { heading, error, running, start, stop };
+  useEffect(() => {
+    if (!running || live != null) return;
+    const t = window.setTimeout(() => setError("No compass readings. Your phone or browser may not support it. Type the bearing instead."), 3000);
+    return () => window.clearTimeout(t);
+  }, [running, live]);
+  // if readings arrive anyway, the compass works: hide any permission message
+  return { heading: running ? live : null, error: running && live != null ? "" : error, running, start, stop: () => setRunning(false) };
 }
 
 // ---------- Form ----------
@@ -88,8 +53,10 @@ export type Picked = { lat: number; lon: number } | null;
 
 export type PickKind = "spot" | "heading";
 
-export default function ReportForm({ me, initialKind, onClose, onSaved, picked, pickedHeading, onStartPick, hidden }: {
+export default function ReportForm({ me, initialKind, onClose, onSaved, picked, pickedHeading, onStartPick, hidden, startedAt }: {
   me: Me; initialKind: ReportKind; onClose: () => void; onSaved: (id: string) => void;
+  /** when the person first tapped (e.g. "Heard a shot" before choosing Enter manually) */
+  startedAt?: number;
   /** spot chosen with the map crosshair (deer / sign / blind) */
   picked: Picked;
   /** direction of travel drawn on the map (degrees true) */
@@ -99,7 +66,7 @@ export default function ReportForm({ me, initialKind, onClose, onSaved, picked, 
   /** true while the map crosshair is open: keep the form (and what's typed) but hide it */
   hidden: boolean;
 }) {
-  const tappedAt = useRef(Date.now()).current; // moment they tapped the button
+  const tappedAt = useRef(startedAt ?? Date.now()).current; // moment they tapped the button
   const [kind, setKind] = useState<ReportKind>(initialKind);
   const [name, setName] = useState(() => load("st:name"));
   const [loc, setLoc] = useState<Loc | null>(null);

@@ -11,6 +11,8 @@ import type { Me, ShotView } from "./App";
 
 const DEFAULT_CENTER: [number, number] = [45.0985, -78.3197];
 import { when } from "@/lib/time";
+import { useHeading } from "@/lib/compass";
+import { declinationAt } from "@/lib/declination";
 const fmtTime = when; // date + time, e.g. "Yesterday 11:30 AM"
 
 function estimateIcon(color: string, label: string) {
@@ -227,10 +229,7 @@ export default function ShotMap({ shots, sightings, signs, blinds, me, focus, pi
       {me && (
         <>
           <Circle center={[me.lat, me.lon]} radius={me.accuracy} pathOptions={{ color: "#1a73e8", weight: 1, fillOpacity: 0.1 }} />
-          <CircleMarker center={[me.lat, me.lon]} radius={7} bubblingMouseEvents={!tap} eventHandlers={tapHandlers(tap, me.lat, me.lon)}
-            pathOptions={{ color: "#fff", weight: 3, fillColor: "#1a73e8", fillOpacity: 1 }}>
-            <Tooltip direction="top" offset={[0, -6]}>You</Tooltip>
-          </CircleMarker>
+          <MeMarker me={me} eventHandlers={tapHandlers(tap, me.lat, me.lon)} />
         </>
       )}
     </MapContainer>
@@ -380,5 +379,29 @@ function RulerLine({ pts }: { pts: [number, number][] }) {
         </CircleMarker>
       ))}
     </>
+  );
+}
+
+/** Blue "you are here" dot with a cone showing where the top of the phone points.
+ *  Only the cone's rotation is updated as the phone turns (cheap: no map re-render). */
+const meIcon = L.divIcon({
+  className: "", iconSize: [90, 90], iconAnchor: [45, 45],
+  html: `<div class="me-wrap"><div class="me-cone"></div><div class="me-dot"></div></div>`,
+});
+function MeMarker({ me, eventHandlers }: { me: NonNullable<Me>; eventHandlers: L.LeafletEventHandlerFnMap }) {
+  const heading = useHeading(); // magnetic
+  const ref = useRef<L.Marker | null>(null);
+  const decl = useMemo(() => declinationAt(me.lat, me.lon), [Math.round(me.lat * 10), Math.round(me.lon * 10)]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const cone = ref.current?.getElement()?.querySelector(".me-cone") as HTMLElement | null;
+    if (!cone) return;
+    if (heading == null) { cone.style.display = "none"; return; }
+    cone.style.display = "block";
+    cone.style.transform = `rotate(${heading + decl}deg)`; // map is north-up, so use true heading
+  }, [heading, decl]);
+  return (
+    <Marker position={[me.lat, me.lon]} icon={meIcon} ref={ref} zIndexOffset={1000} eventHandlers={eventHandlers}>
+      <Tooltip direction="top" offset={[0, -10]}>You</Tooltip>
+    </Marker>
   );
 }

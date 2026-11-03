@@ -5,6 +5,8 @@ import { bearingTo, compassPoint, distance, formatDistance, groupShots, triangul
 import { colorFor, DEER_STYLE, deerText, SIGN_COLOR, SIGN_STYLE, BLIND_COLOR, BLIND_STYLE } from "@/lib/colors";
 import { beep, unlockAudio, vibrate } from "@/lib/alert";
 import { ago } from "@/lib/time";
+import QuickShot from "./QuickShot";
+import { listenCompass, needsPermission, previouslyGranted, startCompass } from "@/lib/compass";
 import ReportForm, { type Picked, type PickKind, type ReportKind } from "./ReportForm";
 import ShotList, { type LayerKey, type Layers } from "./ShotList";
 
@@ -41,6 +43,23 @@ export default function App() {
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [me, setMe] = useState<Me>(null);
   const [formKind, setFormKind] = useState<ReportKind | null>(null);
+  const [formStartedAt, setFormStartedAt] = useState<number | undefined>(undefined);
+  // Quick shot screen: opened by "Heard a shot"
+  const [quick, setQuick] = useState<{ tappedAt: number; compass: Promise<"ok" | "denied" | "unsupported"> } | null>(null);
+  function heardShot() {
+    // startCompass() must run inside the tap so iPhone can ask for compass permission
+    setQuick({ tappedAt: Date.now(), compass: startCompass() });
+  }
+
+  // Compass arrow on the blue dot: Android needs no permission, so start right away.
+  // iPhone needs a tap; if it was allowed before, restart quietly on the first tap anywhere.
+  useEffect(() => {
+    listenCompass();
+    if (!needsPermission() || !previouslyGranted()) return;
+    const once = () => { void startCompass(); window.removeEventListener("pointerdown", once); };
+    window.addEventListener("pointerdown", once);
+    return () => window.removeEventListener("pointerdown", once);
+  }, []);
   // Map crosshair ("Pick on map") for deer, sign and blinds
   const [pickMode, setPickMode] = useState<PickKind | null>(null);
   const picking = pickMode !== null;
@@ -50,12 +69,14 @@ export default function App() {
   const [aimFrom, setAimFrom] = useState<{ lat: number; lon: number } | null>(null);
   const [pickedHeading, setPickedHeading] = useState<number | null>(null);
   const [center, setCenter] = useState<{ lat: number; lon: number } | null>(null);
-  function openForm(k: ReportKind) { setPicked(null); setPickedHeading(null); setPicking(false); setRuler(null); setFormKind(k); }
+  function openForm(k: ReportKind, startedAt?: number) {
+    setFormStartedAt(startedAt); setPicked(null); setPickedHeading(null); setPicking(false); setRuler(null); setFormKind(k); }
 
   // "My location" button
   const [goto, setGoto] = useState<{ lat: number; lon: number; n: number } | null>(null);
   const [locating, setLocating] = useState(false);
   function locateMe() {
+    void startCompass(); // also turns on the direction arrow (asks on iPhone)
     if (me) return setGoto((g) => ({ lat: me.lat, lon: me.lon, n: (g?.n ?? 0) + 1 }));
     if (!("geolocation" in navigator)) return alert("This browser can't share your location.");
     setLocating(true);
@@ -445,15 +466,32 @@ export default function App() {
       )}
 
       <div className="fabs" style={picking || ruler ? { display: "none" } : undefined}>
-        <button className="report-fab" onClick={() => openForm("shot")}>🔊 Heard a shot</button>
+        <button className="report-fab" onClick={heardShot}>🔊 Heard a shot</button>
         <button className="deer-fab" onClick={() => openForm("deer")} aria-label="Report a deer sighting">🦌 Deer</button>
         <button className="sign-fab" onClick={() => openForm("sign")} aria-label="Mark deer sign">🍂 Sign</button>
       </div>
+
+      {quick && (
+        <QuickShot
+          me={me}
+          tappedAt={quick.tappedAt}
+          compass={quick.compass}
+          onClose={() => setQuick(null)}
+          onManual={() => { const t = quick.tappedAt; setQuick(null); openForm("shot", t); }}
+          onSaved={(id) => {
+            seen.current?.add(id);
+            setQuick(null);
+            popUp({ key: "", color: "#2b8a3e", text: "✓ Shot registered", sub: "Everyone can see it now" }, true);
+            load();
+          }}
+        />
+      )}
 
       {formKind && (
         <ReportForm
           me={me}
           initialKind={formKind}
+          startedAt={formStartedAt}
           onClose={() => { setFormKind(null); setPicking(false); }}
           picked={picked}
           pickedHeading={pickedHeading}

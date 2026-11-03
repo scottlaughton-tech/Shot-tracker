@@ -29,11 +29,12 @@ Until steps 2–4 are done, the site shows a warning (no passcode, or reports ar
 
 ## Using it in the field
 
-- Tap **🔊 I heard a shot** right away. The time is captured at that moment, and you
-  can adjust it if you're reporting late.
-- **Point phone:** tap *Start compass*, hold the phone **flat**, point the **top edge**
-  at the sound, then tap *Lock this direction*. Keep it away from your rifle, because
-  steel throws off phone compasses.
+- Tap **🔊 Heard a shot** right away. The time is recorded at that moment.
+  A compass screen opens: **point the top of your phone toward the shot** and tap **REGISTER SHOT**.
+  Your GPS position and the compass bearing are sent together. (On iPhone, tap **Allow** the first
+  time it asks for compass access.) **Enter manually** opens the full step-by-step form instead.
+- **Blue dot:** your position, with a cone showing which way the top of your phone is pointing.
+- Keep the phone flat and away from your rifle, because steel throws off phone compasses.
 - **Type degrees:** use a real compass. Choose **Magnetic** (most compasses) or **True north**.
   Magnetic readings are corrected automatically (around Bancroft ON the correction is about 11° W).
 - **🦌 Deer button:** report a buck, doe or fawn sighting at your location, with how many,
