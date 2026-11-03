@@ -76,7 +76,7 @@ function useCompass() {
 }
 
 // ---------- Form ----------
-export default function ReportForm({ me, onClose, onSaved }: { me: Me; onClose: () => void; onSaved: () => void }) {
+export default function ReportForm({ me, onClose, onSaved }: { me: Me; onClose: () => void; onSaved: (id: string) => void }) {
   const tappedAt = useRef(Date.now()).current; // moment they tapped "I heard a shot"
   const [name, setName] = useState(() => load("st:name"));
   const [loc, setLoc] = useState<Loc | null>(null);
@@ -161,8 +161,9 @@ export default function ReportForm({ me, onClose, onSaved }: { me: Me; onClose: 
     setBusy(false);
     if (!res) return setError("No connection. Try again when you have signal.");
     if (!res.ok) return setError((await res.json().catch(() => ({}))).error ?? "Something went wrong.");
+    const saved = await res.json().catch(() => ({}));
     compass.stop();
-    onSaved();
+    onSaved(saved.report?.id ?? "");
   }
 
   return (

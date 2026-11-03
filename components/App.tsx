@@ -1,8 +1,9 @@
 "use client";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { groupShots, triangulate, type Report, type Fix, type Shot } from "@/lib/geo";
 import { colorFor } from "@/lib/colors";
+import { beep, unlockAudio, vibrate } from "@/lib/alert";
 import ReportForm from "./ReportForm";
 import ShotList from "./ShotList";
 
@@ -26,6 +27,52 @@ export default function App() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [focus, setFocus] = useState<{ key: string; n: number } | null>(null);
   const [offline, setOffline] = useState(false);
+  const [toast, setToast] = useState<{ text: string; sub: string; key: string; color: string } | null>(null);
+  const [soundOn, setSoundOn] = useState(false);
+  const soundRef = useRef(false);
+  const seen = useRef<Set<string> | null>(null); // report ids already known (null = first load)
+  const toastTimer = useRef<number | undefined>(undefined);
+
+  // Sound preference (remembered per phone). Off by default so a phone doesn't beep in a stand.
+  useEffect(() => {
+    try { if (localStorage.getItem("st:sound") === "1") { setSoundOn(true); soundRef.current = true; } } catch {}
+    const unlock = () => soundRef.current && unlockAudio();
+    window.addEventListener("pointerdown", unlock);
+    return () => window.removeEventListener("pointerdown", unlock);
+  }, []);
+
+  function toggleSound() {
+    const v = !soundOn;
+    setSoundOn(v);
+    soundRef.current = v;
+    try { localStorage.setItem("st:sound", v ? "1" : "0"); } catch {}
+    if (v) { unlockAudio(); beep(); }
+  }
+
+  /** Pop-up (+ vibration / sound) when someone ELSE reports a shot. */
+  const announce = useCallback((all: Report[], interval: number) => {
+    const known = seen.current;
+    seen.current = new Set(all.map((r) => r.id));
+    if (!known) return; // first load: don't alert for old reports
+    const fresh = all.filter((r) => !known.has(r.id));
+    if (!fresh.length) return;
+    const shots = groupShots(all, interval);
+    const latest = fresh.sort((a, b) => b.createdAt - a.createdAt)[0];
+    const shot = shots.find((s) => s.reports.some((r) => r.id === latest.id));
+    if (!shot) return;
+    const names = [...new Set(fresh.map((r) => r.name))].join(", ");
+    const n = shot.reports.length;
+    setToast({
+      key: shot.key,
+      color: colorFor(shot.index),
+      text: n === 1 ? `🔊 ${names} heard a shot` : `🔊 ${names} also heard Shot #${shot.index + 1}`,
+      sub: `Shot #${shot.index + 1} · ${n} report${n > 1 ? "s" : ""}${n >= 2 ? " · location estimated" : " · need 1 more to locate"} · tap to view`,
+    });
+    window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(null), 20000);
+    vibrate();
+    if (soundRef.current) beep();
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -34,12 +81,13 @@ export default function App() {
       const data = await res.json();
       setReports(data.reports);
       setIntervalMin(data.intervalMin);
+      announce(data.reports, data.intervalMin);
       setHasDatabase(data.hasDatabase);
       setOffline(false);
     } catch {
       setOffline(true);
     }
-  }, []);
+  }, [announce]);
 
   // Refresh every 10 seconds while the page is on screen. Pauses when the phone
   // is locked or the app is in the background (saves database requests and battery),
@@ -105,7 +153,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <strong>🦌 Shot Tracker</strong>
+        <strong>🦌<span className="hide-sm"> Shot Tracker</span></strong>
         <label className="interval">
           <span className="hide-sm">Same shot if within</span>
           <span className="show-sm">Group</span>
@@ -115,7 +163,11 @@ export default function App() {
             ))}
           </select>
         </label>
-        <button className="btn small" onClick={() => setPanelOpen((o) => !o)}>
+        <button className="btn small icon" onClick={toggleSound} aria-label={soundOn ? "Turn alert sound off" : "Turn alert sound on"}
+          title={soundOn ? "Alert sound on" : "Alert sound off"}>
+          {soundOn ? "🔔" : "🔕"}
+        </button>
+        <button className="btn small shots-btn" onClick={() => setPanelOpen((o) => !o)}>
           Shots ({shots.length})
         </button>
       </header>
@@ -150,13 +202,25 @@ export default function App() {
         </aside>
       </div>
 
+      {toast && (
+        <button className="toast" style={{ borderLeftColor: toast.color }} onClick={() => {
+          setHidden((h) => { const n = new Set(h); n.delete(toast.key); return n; });
+          setFocus((f) => ({ key: toast.key, n: (f?.n ?? 0) + 1 }));
+          setToast(null);
+        }}>
+          <strong>{toast.text}</strong>
+          <span>{toast.sub}</span>
+          <span className="toast-x" onClick={(e) => { e.stopPropagation(); setToast(null); }} aria-label="Dismiss">✕</span>
+        </button>
+      )}
+
       <button className="report-fab" onClick={() => setFormOpen(true)}>🔊 I heard a shot</button>
 
       {formOpen && (
         <ReportForm
           me={me}
           onClose={() => setFormOpen(false)}
-          onSaved={() => { setFormOpen(false); load(); }}
+          onSaved={(id) => { seen.current?.add(id); setFormOpen(false); load(); }}
         />
       )}
     </div>
