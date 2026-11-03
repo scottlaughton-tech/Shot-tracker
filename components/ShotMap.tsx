@@ -385,8 +385,11 @@ function RulerLine({ pts }: { pts: [number, number][] }) {
 /** Blue "you are here" dot with a cone showing where the top of the phone points.
  *  Only the cone's rotation is updated as the phone turns (cheap: no map re-render). */
 const meIcon = L.divIcon({
-  className: "", iconSize: [90, 90], iconAnchor: [45, 45],
-  html: `<div class="me-wrap"><div class="me-cone"></div><div class="me-dot"></div></div>`,
+  className: "", iconSize: [64, 64], iconAnchor: [32, 32],
+  // notched black arrowhead just outside the dot (rotated to the phone's heading)
+  html: `<div class="me-wrap"><div class="me-cone"><svg viewBox="-9 -11 18 21" width="18" height="21" aria-hidden="true">`
+    + `<path d="M0,-10 L8,9 L0,4.5 L-8,9 Z" fill="#111" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg></div>`
+    + `<div class="me-dot"></div></div>`,
 });
 function MeMarker({ me, eventHandlers }: { me: NonNullable<Me>; eventHandlers: L.LeafletEventHandlerFnMap }) {
   const heading = useHeading(); // magnetic

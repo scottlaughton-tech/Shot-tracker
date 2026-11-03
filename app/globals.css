@@ -351,16 +351,15 @@ p { margin: 0; }
 }
 
 /* ---------- "You are here" with direction cone ---------- */
-.me-wrap { position: relative; width: 90px; height: 90px; pointer-events: auto; }
+.me-wrap { position: relative; width: 64px; height: 64px; pointer-events: auto; }
 .me-dot {
   position: absolute; left: 50%; top: 50%; width: 16px; height: 16px; transform: translate(-50%, -50%);
   border-radius: 50%; background: #1a73e8; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4);
 }
-.me-cone {
-  display: none; position: absolute; inset: 0; transition: transform .12s linear;
-  background: conic-gradient(from -28deg at 50% 50%, rgba(26,115,232,.55) 0deg, rgba(26,115,232,.15) 56deg, transparent 56deg);
-  -webkit-mask: radial-gradient(circle at 50% 50%, #000 0 45px, transparent 45px);
-          mask: radial-gradient(circle at 50% 50%, #000 0 45px, transparent 45px);
+.me-cone { display: none; position: absolute; inset: 0; transition: transform .12s linear; }
+.me-cone svg {
+  position: absolute; left: 50%; top: calc(50% - 30px); transform: translateX(-50%);
+  filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.45));
 }
 
 /* ---------- Quick shot screen ---------- */
