@@ -275,6 +275,7 @@ export default function App() {
 
       <div className="main">
         <div className="map-wrap">
+          <button className="blind-fab" onClick={() => setFormKind("blind")}>🟧 Add blind</button>
           <ShotMap shots={visible} sightings={mapDeer} signs={mapSigns} blinds={mapBlinds} me={me} focus={focus} />
         </div>
         <aside className={`panel ${panelOpen ? "open" : ""}`}>
