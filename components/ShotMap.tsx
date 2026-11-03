@@ -5,8 +5,8 @@ import { Fragment, useEffect, useMemo, useRef } from "react";
 import {
   Circle, CircleMarker, LayersControl, MapContainer, Marker, Polygon, Polyline, Popup, TileLayer, Tooltip, useMap,
 } from "react-leaflet";
-import { bearingTo, compassPoint, destination, distance, ellipsePolygon, formatDistance, type Sighting } from "@/lib/geo";
-import { DEER_STYLE } from "@/lib/colors";
+import { bearingTo, compassPoint, destination, distance, ellipsePolygon, formatDistance, type Sighting, type Sign } from "@/lib/geo";
+import { DEER_STYLE, SIGN_STYLE } from "@/lib/colors";
 import type { Me, ShotView } from "./App";
 
 const DEFAULT_CENTER: [number, number] = [45.0985, -78.3197];
@@ -22,7 +22,9 @@ function estimateIcon(color: string, label: string) {
 }
 
 /** Zooms the map to fit everything once on first data, and when a shot is "Zoomed". */
-function FitBounds({ shots, sightings, me, focus }: { shots: ShotView[]; sightings: Sighting[]; me: Me; focus: { key: string; n: number } | null }) {
+function FitBounds({ shots, sightings, signs, me, focus }: {
+  shots: ShotView[]; sightings: Sighting[]; signs: Sign[]; me: Me; focus: { key: string; n: number } | null;
+}) {
   const map = useMap();
   const didInitial = useRef(false);
   const lastFocus = useRef(0);
@@ -38,7 +40,7 @@ function FitBounds({ shots, sightings, me, focus }: { shots: ShotView[]; sightin
     };
     if (focus && focus.n !== lastFocus.current) {
       lastFocus.current = focus.n;
-      const d = sightings.find((x) => x.id === focus.key);
+      const d = sightings.find((x) => x.id === focus.key) ?? signs.find((x) => x.id === focus.key);
       if (d) {
         map.setView([d.lat, d.lon], Math.max(map.getZoom(), 15));
         return;
@@ -54,6 +56,7 @@ function FitBounds({ shots, sightings, me, focus }: { shots: ShotView[]; sightin
     if (!didInitial.current) {
       const p = pts(shots);
       sightings.forEach((d) => p.push([d.lat, d.lon]));
+      signs.forEach((d) => p.push([d.lat, d.lon]));
       if (p.length) {
         didInitial.current = true;
         map.fitBounds(L.latLngBounds(p), { padding: [40, 40], maxZoom: 15 });
@@ -62,12 +65,12 @@ function FitBounds({ shots, sightings, me, focus }: { shots: ShotView[]; sightin
         map.setView([me.lat, me.lon], 14);
       }
     }
-  }, [shots, sightings, me, focus, map]);
+  }, [shots, sightings, signs, me, focus, map]);
   return null;
 }
 
-export default function ShotMap({ shots, sightings, me, focus }: {
-  shots: ShotView[]; sightings: Sighting[]; me: Me; focus: { key: string; n: number } | null;
+export default function ShotMap({ shots, sightings, signs, me, focus }: {
+  shots: ShotView[]; sightings: Sighting[]; signs: Sign[]; me: Me; focus: { key: string; n: number } | null;
 }) {
   const icons = useMemo(() => new Map(shots.map((s) => [s.key, estimateIcon(s.color, String(s.index + 1))])), [shots]);
 
@@ -97,7 +100,19 @@ export default function ShotMap({ shots, sightings, me, focus }: {
         </LayersControl.BaseLayer>
       </LayersControl>
 
-      <FitBounds shots={shots} sightings={sightings} me={me} focus={focus} />
+      <FitBounds shots={shots} sightings={sightings} signs={signs} me={me} focus={focus} />
+
+      {signs.map((x) => (
+        <Marker key={x.id} position={[x.lat, x.lon]} icon={signIcon(x)}>
+          <Tooltip direction="right" offset={[12, 0]}>{SIGN_STYLE[x.sign].label}</Tooltip>
+          <Popup>
+            <b>{SIGN_STYLE[x.sign].label}</b><br />
+            Marked by {x.name}, {new Date(x.time).toLocaleDateString([], { month: "short", day: "numeric" })} {fmtTime(x.time)}
+            {x.note && <><br />“{x.note}”</>}
+            {me && <><br />{formatDistance(distance(me.lat, me.lon, x.lat, x.lon))} {compassPoint(bearingTo(me.lat, me.lon, x.lat, x.lon))} of you</>}
+          </Popup>
+        </Marker>
+      ))}
 
       {sightings.map((d) => <SightingLayer key={d.id} d={d} me={me} />)}
 
@@ -225,4 +240,17 @@ function SightingLayer({ d, me }: { d: Sighting; me: Me }) {
       </Marker>
     </>
   );
+}
+
+const signIcons = new Map<string, L.DivIcon>();
+function signIcon(x: Sign) {
+  let icon = signIcons.get(x.sign);
+  if (!icon) {
+    icon = L.divIcon({
+      className: "", iconSize: [24, 24], iconAnchor: [12, 12],
+      html: `<div class="sign-icon"><span>${SIGN_STYLE[x.sign].short}</span></div>`,
+    });
+    signIcons.set(x.sign, icon);
+  }
+  return icon;
 }

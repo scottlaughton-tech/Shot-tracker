@@ -40,6 +40,10 @@ Until steps 2–4 are done, the site shows a warning (no passcode, or reports ar
   which way it's heading (same "Point phone" or "Type" input, or **Not moving**) and an optional note.
   Sightings show on the map as lettered markers (B, D, F) with dashed arrows. Older sightings fade.
   In the list panel you can turn them on or off and choose **Today** or **All**.
+- **🍂 Sign button:** mark deer sign where you're standing: ground scrape, tree scrape (rub),
+  droppings, tracks or a bed, with an optional note. Shown as purple diamonds (Sc, Rb, Dp, Tk, Bd).
+- **Clearing:** shots, deer sightings and deer sign each have their own "Clear all" button
+  at the bottom of their section in the list panel.
 - **Alerts:** when someone else reports a shot or a deer, a pop-up appears (Android also vibrates).
   Tap 🔕 in the top bar to also play a beep.
 - **List panel:** tick or untick shots to show or hide their lines, *Zoom* to one, or delete

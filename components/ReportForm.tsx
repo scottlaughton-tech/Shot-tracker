@@ -2,6 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import { compassPoint, norm360 } from "@/lib/geo";
 import { declinationAt } from "@/lib/declination";
+import { SIGN_STYLE } from "@/lib/colors";
+import type { SignType } from "@/lib/geo";
 import type { Me } from "./App";
 
 type Loc = { lat: number; lon: number; accuracy: number | null };
@@ -76,7 +78,7 @@ function useCompass() {
 }
 
 // ---------- Form ----------
-export type ReportKind = "shot" | "deer";
+export type ReportKind = "shot" | "deer" | "sign";
 const DEER_TYPES = [
   { v: "buck", label: "Buck" }, { v: "doe", label: "Doe" },
   { v: "fawn", label: "Fawn" }, { v: "unknown", label: "Not sure" },
@@ -103,12 +105,14 @@ export default function ReportForm({ me, initialKind, onClose, onSaved }: {
   const [deer, setDeer] = useState<(typeof DEER_TYPES)[number]["v"]>("buck");
   const [count, setCount] = useState(1);
   const [note, setNote] = useState("");
+  const [sign, setSign] = useState<SignType | null>(null);
 
   const [time, setTime] = useState(() => toLocalInput(tappedAt));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const isDeer = kind === "deer";
+  const isSign = kind === "sign";
   // "Not moving" only makes sense for deer
   const dirMode = !isDeer && mode === "still" ? "compass" : mode;
 
@@ -164,19 +168,23 @@ export default function ReportForm({ me, initialKind, onClose, onSaved }: {
     const t = new Date(time).getTime();
     if (!name.trim()) return setError("Enter your first name.");
     if (!effLoc) return setError("Your location is needed.");
-    if (dirMode !== "still" && (bearing == null || bearing < 0 || bearing > 360)) {
+    if (isSign) {
+      if (!sign) return setError("Choose what kind of sign you found.");
+    } else if (dirMode !== "still" && (bearing == null || bearing < 0 || bearing > 360)) {
       return setError(dirMode === "compass" ? "Point your phone and lock a direction." : "Enter a direction from 0 to 360.");
     }
-    if (!isFinite(t)) return setError(isDeer ? "Enter the time you saw it." : "Enter the time you heard it.");
+    if (!isSign && !isFinite(t)) return setError(isDeer ? "Enter the time you saw it." : "Enter the time you heard it.");
     setBusy(true);
     save("st:name", name.trim());
-    if (dirMode !== "still") save("st:mode", dirMode);
+    if (!isSign && dirMode !== "still") save("st:mode", dirMode);
     save("st:ref", ref);
     const base = { name: name.trim(), lat: effLoc.lat, lon: effLoc.lon, accuracy: effLoc.accuracy };
-    const res = await fetch(isDeer ? "/api/sightings" : "/api/reports", {
+    const res = await fetch(isSign ? "/api/signs" : isDeer ? "/api/sightings" : "/api/reports", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(isDeer
+      body: JSON.stringify(isSign
+        ? { ...base, sign, note }
+        : isDeer
         ? { ...base, deer, count, note, heading: dirMode === "still" ? null : bearing, headingRef: bearingRef, time: t }
         : { ...base, bearing, bearingRef, shotTime: t }),
     }).catch(() => null);
@@ -185,20 +193,21 @@ export default function ReportForm({ me, initialKind, onClose, onSaved }: {
     if (!res.ok) return setError((await res.json().catch(() => ({}))).error ?? "Something went wrong.");
     const saved = await res.json().catch(() => ({}));
     compass.stop();
-    onSaved(saved.report?.id ?? saved.sighting?.id ?? "");
+    onSaved(saved.report?.id ?? saved.sighting?.id ?? saved.sign?.id ?? "");
   }
 
   return (
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
         <div className="row between">
-          <h2>{isDeer ? "Report a deer" : "Report a shot"}</h2>
+          <h2>{isSign ? "Mark deer sign" : isDeer ? "Report a deer" : "Report a shot"}</h2>
           <button className="btn small ghost" onClick={onClose}>✕</button>
         </div>
 
         <div className="tabs kind">
-          <button type="button" className={!isDeer ? "on" : ""} onClick={() => setKind("shot")}>🔊 Shot heard</button>
-          <button type="button" className={isDeer ? "on" : ""} onClick={() => setKind("deer")}>🦌 Deer seen</button>
+          <button type="button" className={kind === "shot" ? "on" : ""} onClick={() => setKind("shot")}>🔊 Shot</button>
+          <button type="button" className={isDeer ? "on" : ""} onClick={() => setKind("deer")}>🦌 Deer</button>
+          <button type="button" className={isSign ? "on" : ""} onClick={() => { setKind("sign"); compass.stop(); }}>🍂 Sign</button>
         </div>
 
         <label>
@@ -233,6 +242,21 @@ export default function ReportForm({ me, initialKind, onClose, onSaved }: {
           )}
         </fieldset>
 
+        {isSign && (
+          <fieldset>
+            <legend>2 · What kind of sign</legend>
+            <div className="chips">
+              {(Object.keys(SIGN_STYLE) as SignType[]).map((k) => (
+                <button key={k} type="button" className={sign === k ? "on" : ""} onClick={() => { setSign(k); setError(""); }}>
+                  {SIGN_STYLE[k].label}
+                </button>
+              ))}
+            </div>
+            <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={120} placeholder="Note (optional), e.g. fresh, still wet" />
+            <p className="hint">It&apos;s marked where you&apos;re standing, so stand at the sign.</p>
+          </fieldset>
+        )}
+
         {isDeer && (
           <fieldset>
             <legend>2 · What you saw</legend>
@@ -251,6 +275,7 @@ export default function ReportForm({ me, initialKind, onClose, onSaved }: {
           </fieldset>
         )}
 
+        {!isSign && (<>
         <fieldset>
           <legend>{isDeer ? "3 · Which way it's heading" : "2 · Direction the sound came from"}</legend>
           <div className="tabs">
@@ -318,6 +343,7 @@ export default function ReportForm({ me, initialKind, onClose, onSaved }: {
             ))}
           </div>
         </fieldset>
+        </>)}
 
         {error && <p className="error">{error}</p>}
         <button className="btn primary big" onClick={submit} disabled={busy}>{busy ? "Sending…" : "Send report"}</button>

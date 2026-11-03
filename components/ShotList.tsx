@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
-import { bearingTo, compassPoint, distance, formatDistance, type Sighting } from "@/lib/geo";
-import { DEER_STYLE } from "@/lib/colors";
+import { bearingTo, compassPoint, distance, formatDistance, type Sighting, type Sign } from "@/lib/geo";
+import { DEER_STYLE, SIGN_COLOR, SIGN_STYLE } from "@/lib/colors";
 import { ago } from "@/lib/time";
 import type { Me, ShotView } from "./App";
 
@@ -27,6 +27,10 @@ type Props = {
   deerRange: "today" | "all";
   onDeerRange: (v: "today" | "all") => void;
   onClearDeer: () => void;
+  signs: Sign[];
+  showSign: boolean;
+  onShowSign: (v: boolean) => void;
+  onClearSigns: () => void;
 };
 
 export default function ShotList(p: Props) {
@@ -145,6 +149,36 @@ export default function ShotList(p: Props) {
       })}
       {p.totalSightings > 0 && (
         <button className="btn small danger clear-all" onClick={p.onClearDeer}>Clear all deer sightings</button>
+      )}
+
+      <div className="row between section-title">
+        <h2>🍂 Deer sign</h2>
+        <label className="row gap" style={{ flexDirection: "row", fontWeight: 500 }}>
+          <input type="checkbox" checked={p.showSign} onChange={(e) => p.onShowSign(e.target.checked)} style={{ width: 20, height: 20 }} />
+          On map
+        </label>
+      </div>
+      {p.signs.length === 0 && <p className="muted">No deer sign marked yet.</p>}
+      {p.signs.map((x) => (
+        <div key={x.id} className="sighting">
+          <div className="row gap">
+            <span className="deer-dot" style={{ background: SIGN_COLOR, borderRadius: 4, fontSize: 10 }}>{SIGN_STYLE[x.sign].short}</span>
+            <span className="grow">
+              <strong>{SIGN_STYLE[x.sign].label}</strong>
+              <br />
+              <span className="muted">{x.name} · {fmtDay(x.time)} {fmtTime(x.time)}</span>
+              {p.me && <span className="muted"> · {formatDistance(distance(p.me.lat, p.me.lon, x.lat, x.lon))} {compassPoint(bearingTo(p.me.lat, p.me.lon, x.lat, x.lon))} of you</span>}
+              {x.note && <><br />“{x.note}”</>}
+            </span>
+          </div>
+          <div className="row gap" style={{ justifyContent: "flex-end", marginTop: 6 }}>
+            <button className="btn small" onClick={() => p.onFocus(x.id)}>Zoom</button>
+            <button className="btn small danger" onClick={() => p.onDelete(x.id)}>Delete</button>
+          </div>
+        </div>
+      ))}
+      {p.signs.length > 0 && (
+        <button className="btn small danger clear-all" onClick={p.onClearSigns}>Clear all deer sign</button>
       )}
     </div>
   );

@@ -34,6 +34,20 @@ export type Sighting = {
   createdAt: number;
 };
 
+export type SignType = "ground-scrape" | "rub" | "droppings" | "tracks" | "bed";
+
+export type Sign = {
+  id: string; // starts with "sign:"
+  name: string;
+  lat: number;
+  lon: number;
+  accuracy: number | null;
+  sign: SignType;
+  note: string;
+  time: number;
+  createdAt: number;
+};
+
 const R = 6371000; // Earth radius, metres
 const rad = (d: number) => (d * Math.PI) / 180;
 const deg = (r: number) => (r * 180) / Math.PI;

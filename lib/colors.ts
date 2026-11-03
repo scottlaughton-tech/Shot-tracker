@@ -18,3 +18,13 @@ export function deerText(deer: keyof typeof DEER_STYLE, count: number): string {
   if (count === 1) return deer === "unknown" ? "a deer" : `a ${l}`;
   return `${count} ${deer === "unknown" ? "deer" : l === "buck" ? "bucks" : l === "doe" ? "does" : "fawns"}`;
 }
+
+// Deer sign markers (purple diamonds).
+export const SIGN_COLOR = "#6a3d9a";
+export const SIGN_STYLE = {
+  "ground-scrape": { short: "Sc", label: "Ground scrape" },
+  rub: { short: "Rb", label: "Tree scrape (rub)" },
+  droppings: { short: "Dp", label: "Droppings" },
+  tracks: { short: "Tk", label: "Tracks" },
+  bed: { short: "Bd", label: "Bed" },
+} as const;

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { isAuthed } from "@/lib/auth";
-import { addReport, clearReports, hasDatabase, loadAll } from "@/lib/store";
+import { addReport, clearKind, hasDatabase, loadAll } from "@/lib/store";
 import { declinationAt } from "@/lib/declination";
 import { norm360, type Report } from "@/lib/geo";
 
@@ -10,8 +10,8 @@ const unauthorized = () => NextResponse.json({ error: "Not signed in" }, { statu
 
 export async function GET() {
   if (!(await isAuthed())) return unauthorized();
-  const { reports, sightings, intervalMin } = await loadAll();
-  return NextResponse.json({ reports, sightings, intervalMin, hasDatabase });
+  const { reports, sightings, signs, intervalMin } = await loadAll();
+  return NextResponse.json({ reports, sightings, signs, intervalMin, hasDatabase });
 }
 
 export async function POST(req: Request) {
@@ -46,6 +46,6 @@ export async function POST(req: Request) {
 
 export async function DELETE() {
   if (!(await isAuthed())) return unauthorized();
-  await clearReports();
+  await clearKind("shots");
   return NextResponse.json({ ok: true });
 }

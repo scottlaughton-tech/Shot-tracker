@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { isAuthed } from "@/lib/auth";
-import { addReport, clearSightings, SIGHTING_PREFIX } from "@/lib/store";
+import { addReport, clearKind, SIGHTING_PREFIX } from "@/lib/store";
 import { declinationAt } from "@/lib/declination";
 import { norm360, type DeerType, type Sighting } from "@/lib/geo";
 
@@ -47,6 +47,6 @@ export async function POST(req: Request) {
 
 export async function DELETE() {
   if (!(await isAuthed())) return unauthorized();
-  await clearSightings();
+  await clearKind("sightings");
   return NextResponse.json({ ok: true });
 }
