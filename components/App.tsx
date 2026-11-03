@@ -325,7 +325,7 @@ export default function App() {
     <div className="app">
       <header className="topbar">
         <div className="brand">
-          <strong>🦌<span className="hide-sm"> Shot Tracker</span></strong>
+          <strong><a className="game-link" href="/game" aria-label="Play Last Light, the hunting game" title="Play Last Light">🦌</a><span className="hide-sm"> Shot Tracker</span></strong>
           <button className="info-btn" onClick={() => setHelpOpen(true)} aria-label="How to use this app" title="How to use this app">i</button>
         </div>
         <label className="interval">

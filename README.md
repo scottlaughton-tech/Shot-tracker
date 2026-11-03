@@ -83,13 +83,27 @@ assumes each bearing is off by about ±5°. The shaded area grows when the lines
 Three or more reports from people spread out to the side give much better results than
 two people standing close together.
 
+## The hunting game: Last Light
+
+Tap the **🦌** at the top left of the map. Hold the phone sideways.
+
+- **Touch and hold** to bring up the scope, **slide** to aim, press **FIRE** with the other thumb.
+  **+ / −** change the magnification (4–16×).
+- A .308 sighted in at 200 m. Use the numbered marks under the crosshair for 300–1000 m, the scale at
+  the bottom left to judge range (no rangefinder), and aim ahead of moving bucks.
+- 10 rounds per hunt. Heart/lung and head shots score best; gut, rump and leg shots only wound, and a
+  wounded buck that gets away costs points. Scores are saved to a shared party leaderboard.
+
+Everything in the game (the woods, the buck, the sounds) is drawn by code. See
+**[docs/GAME.md](docs/GAME.md)** for how it works.
+
 ## For developers
 
-See **[docs/DEVELOPER.md](docs/DEVELOPER.md)** for the architecture, data model, API, triangulation
+See **[docs/DEVELOPER.md](docs/DEVELOPER.md)** (and **[docs/GAME.md](docs/GAME.md)** for the game) for the architecture, data model, API, triangulation
 math, compass handling, design decisions, known limitations and ideas not yet built.
 
 ```bash
 npm install
 npm run dev        # http://localhost:3000. No passcode and an in-memory database when run locally
-npm test           # triangulation unit tests
+npm test           # triangulation, ballistics and scoring unit tests
 ```

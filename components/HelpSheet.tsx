@@ -93,6 +93,16 @@ export default function HelpSheet({ onClose }: { onClose: () => void }) {
         </section>
 
         <section>
+          <h3>🦌 The hunting game (Last Light)</h3>
+          <ul>
+            <li>Tap the <b>🦌</b> at the top left to open the game. Turn your phone <b>sideways</b>.</li>
+            <li><b>Touch and hold</b> the screen to look through the scope. <b>Slide</b> your finger to aim. Press the red <b>FIRE</b> button with your other thumb.</li>
+            <li>You get <b>10 rounds</b>. Better hits, longer shots, moving bucks and bigger racks score more. Wounded bucks that get away cost points.</li>
+            <li>The <b>How to play</b> button in the game explains the scope marks. Scores go on the party leaderboard.</li>
+          </ul>
+        </section>
+
+        <section>
           <h3>If something looks wrong</h3>
           <ul>
             <li>Pull down on the page, or close and reopen it, to get the latest version.</li>

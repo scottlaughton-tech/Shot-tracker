@@ -1,6 +1,6 @@
 # Shot Tracker – notes for Claude
 
-Read **docs/DEVELOPER.md** first: architecture, data model, API, triangulation, compass handling,
+Read **docs/DEVELOPER.md** first (and **docs/GAME.md** for the hunting game at `/game`): architecture, data model, API, triangulation, compass handling,
 design decisions, known limitations and the backlog are all there. User-facing docs: README.md and
 the in-app help in `components/HelpSheet.tsx`; keep both in sync with user-visible changes.
 

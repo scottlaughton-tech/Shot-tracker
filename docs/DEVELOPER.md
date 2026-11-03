@@ -48,6 +48,9 @@ app/
   api/signs/route.ts           POST deer sign · DELETE = clear all sign
   api/blinds/route.ts          POST blind · DELETE = clear all blinds
   api/settings/route.ts        PUT {intervalMin} (shared "Group" setting)
+  game/page.tsx                Last Light, the hunting game (opened from the 🦌 in the top bar) – see docs/GAME.md
+  api/game/scores/route.ts     game leaderboard: GET top 20 · POST a finished hunt
+game/                          everything for the game (three.js engine, world, deer) – see docs/GAME.md
 components/
   App.tsx          state hub: polling, alerts/toasts, layers, modes (crosshair, ruler, quick shot), top bar, buttons
   ShotMap.tsx      Leaflet map: shot lines/estimates, deer/sign/blind markers, you-are-here arrow,

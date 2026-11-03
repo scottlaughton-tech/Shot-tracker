@@ -75,3 +75,24 @@ export async function setInterval(min: number): Promise<void> {
   if (!redis) return void (mem.interval = min);
   await redis.hset(REPORTS, { [SETTINGS_FIELD]: JSON.stringify({ intervalMin: min }) });
 }
+
+// ---------- Game leaderboard ----------
+// Kept in its own sorted set so the map's single-read refresh never loads it.
+const SCORES = "shot-tracker:game-scores";
+const KEEP = 200;
+
+export type GameScore = { id: string; name: string; score: number; kills: number; shots: number; best: string | null; at: number };
+const gMem = globalThis as unknown as { __shotScores?: GameScore[] };
+const scoreMem: GameScore[] = (gMem.__shotScores ??= []);
+
+export async function topScores(limit = 20): Promise<GameScore[]> {
+  if (!redis) return [...scoreMem].sort((a, b) => b.score - a.score).slice(0, limit);
+  const rows = await redis.zrange<(string | GameScore)[]>(SCORES, 0, limit - 1, { rev: true });
+  return rows.map((r) => (typeof r === "string" ? JSON.parse(r) : r) as GameScore);
+}
+
+export async function addScore(s: GameScore): Promise<void> {
+  if (!redis) { scoreMem.push(s); return; }
+  await redis.zadd(SCORES, { score: s.score, member: JSON.stringify(s) });
+  await redis.zremrangebyrank(SCORES, 0, -KEEP - 1); // keep the best KEEP
+}
