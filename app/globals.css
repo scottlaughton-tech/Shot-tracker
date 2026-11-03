@@ -525,3 +525,6 @@ p { margin: 0; }
 .g-bn { flex: 1; font-weight: 700; }
 .g-bk { opacity: 0.75; font-size: 14px; }
 .g-help ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; line-height: 1.4; }
+.g-buck-body { display: flex; gap: 12px; align-items: center; margin-top: 4px; }
+.g-diagram { width: 140px; flex: 0 0 140px; height: auto; background: rgba(0,0,0,0.25); border-radius: 8px; }
+.g-parts { flex: 1; }

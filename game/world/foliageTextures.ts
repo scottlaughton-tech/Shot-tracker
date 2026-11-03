@@ -245,8 +245,8 @@ function drawFern(g: CanvasRenderingContext2D, rnd: Rnd, S: number) {
   }
 }
 
-/** Builds the foliage atlas. */
-export function foliageAtlas(): THREE.Texture {
+/** Draws the foliage atlas from scratch (slow: ~3 s on a laptop). */
+export function drawFoliageAtlas(): HTMLCanvasElement {
   const S = 512;
   const c = document.createElement("canvas");
   c.width = c.height = S * ATLAS_CELLS;
@@ -285,7 +285,26 @@ export function foliageAtlas(): THREE.Texture {
     cells[i as Card]?.(g, mulberry32(1000 + i));
     g.restore();
   }
-  return coverageMipmapTexture(c, 0.42);
+  return c;
+}
+
+/**
+ * The foliage atlas. Loads the pre-drawn copy (public/game/tex/atlas.webp, made by
+ * `npm run bake-atlas`) and only draws it in code if that's missing.
+ */
+export async function foliageAtlas(): Promise<THREE.Texture> {
+  const S = 512 * ATLAS_CELLS;
+  let canvas: HTMLCanvasElement | null = null;
+  try {
+    const res = await fetch("/game/tex/atlas.webp");
+    if (res.ok) {
+      const bmp = await createImageBitmap(await res.blob(), { premultiplyAlpha: "none", colorSpaceConversion: "none" });
+      canvas = document.createElement("canvas");
+      canvas.width = canvas.height = S;
+      canvas.getContext("2d", { willReadFrequently: true })!.drawImage(bmp, 0, 0, S, S);
+    }
+  } catch { canvas = null; }
+  return coverageMipmapTexture(canvas ?? drawFoliageAtlas(), 0.42);
 }
 
 /**
@@ -297,78 +316,63 @@ export function foliageAtlas(): THREE.Texture {
 export function coverageMipmapTexture(src: HTMLCanvasElement, cutoff: number): THREE.Texture {
   const cells = ATLAS_CELLS;
   const W0 = src.width;
+  const tg = performance.now();
   const img = src.getContext("2d")!.getImageData(0, 0, W0, W0).data;
-  // level 0 as floats, with rows flipped so v=0 is the bottom (three.js convention)
-  let w = W0;
-  let r = new Float32Array(w * w), g = new Float32Array(w * w), b = new Float32Array(w * w), a = new Float32Array(w * w);
-  for (let y = 0; y < w; y++) for (let x = 0; x < w; x++) {
-    const si = ((w - 1 - y) * w + x) * 4, di = y * w + x;
-    r[di] = img[si]; g[di] = img[si + 1]; b[di] = img[si + 2]; a[di] = img[si + 3];
+  if (location.search.includes("debug")) console.log(`[t]   atlas raster/readback ${(performance.now() - tg).toFixed(0)} ms`);
+  type Level = { w: number; r: Float32Array; g: Float32Array; b: Float32Array; a: Float32Array };
+  // level 0, rows flipped so v=0 is the bottom (three.js convention)
+  const L0: Level = { w: W0, r: new Float32Array(W0 * W0), g: new Float32Array(W0 * W0), b: new Float32Array(W0 * W0), a: new Float32Array(W0 * W0) };
+  for (let y = 0; y < W0; y++) {
+    let si = (W0 - 1 - y) * W0 * 4, di = y * W0;
+    for (let x = 0; x < W0; x++, si += 4, di++) { L0.r[di] = img[si]; L0.g[di] = img[si + 1]; L0.b[di] = img[si + 2]; L0.a[di] = img[si + 3]; }
   }
-  const cover = (aa: Float32Array, ww: number, cx: number, cy: number, cs: number, scale: number) => {
+  const thr = cutoff * 255;
+  const cover = (lv: Level, cx: number, cy: number, cs: number, scale: number) => {
     let n = 0;
-    for (let y = cy; y < cy + cs; y++) for (let x = cx; x < cx + cs; x++) if (aa[y * ww + x] * scale >= cutoff * 255) n++;
+    const t = thr / scale;
+    for (let y = cy; y < cy + cs; y++) { const row = y * lv.w; for (let x = cx; x < cx + cs; x++) if (lv.a[row + x] >= t) n++; }
     return n / (cs * cs);
   };
   const target: number[] = [];
-  const cs0 = w / cells;
-  for (let i = 0; i < cells * cells; i++) target.push(cover(a, w, (i % cells) * cs0, Math.floor(i / cells) * cs0, cs0, 1));
-
-  const pack = (ww: number) => {
-    // bleed colour into transparent pixels so filtering never pulls in black
-    const rr = r.slice(), gg = g.slice(), bb = b.slice(), filled = new Uint8Array(ww * ww);
-    for (let i = 0; i < ww * ww; i++) filled[i] = a[i] > 8 ? 1 : 0;
-    for (let pass = 0; pass < 4; pass++) {
-      const next = filled.slice();
-      for (let y = 0; y < ww; y++) for (let x = 0; x < ww; x++) {
-        const i = y * ww + x;
-        if (filled[i]) continue;
-        let sr = 0, sg = 0, sb = 0, n = 0;
-        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-          const xx = x + dx, yy = y + dy;
-          if (xx < 0 || yy < 0 || xx >= ww || yy >= ww) continue;
-          const j = yy * ww + xx;
-          if (filled[j]) { sr += rr[j]; sg += gg[j]; sb += bb[j]; n++; }
-        }
-        if (n) { rr[i] = sr / n; gg[i] = sg / n; bb[i] = sb / n; next[i] = 1; }
-      }
-      filled.set(next);
+  const cs0 = W0 / cells;
+  for (let i = 0; i < cells * cells; i++) target.push(cover(L0, (i % cells) * cs0, Math.floor(i / cells) * cs0, cs0, 1));
+  // build the chain: alpha-weighted colour averages, then restore each cell's alpha-test coverage
+  const levels: Level[] = [L0];
+  while (levels[levels.length - 1].w > 1) {
+    const p = levels[levels.length - 1], w = p.w >> 1;
+    const q: Level = { w, r: new Float32Array(w * w), g: new Float32Array(w * w), b: new Float32Array(w * w), a: new Float32Array(w * w) };
+    for (let y = 0; y < w; y++) for (let x = 0; x < w; x++) {
+      const i0 = (y * 2) * p.w + x * 2, i1 = i0 + 1, i2 = i0 + p.w, i3 = i2 + 1;
+      const a0 = p.a[i0] + 0.01, a1 = p.a[i1] + 0.01, a2 = p.a[i2] + 0.01, a3 = p.a[i3] + 0.01;
+      const sa = a0 + a1 + a2 + a3, k = y * w + x;
+      q.r[k] = (p.r[i0] * a0 + p.r[i1] * a1 + p.r[i2] * a2 + p.r[i3] * a3) / sa;
+      q.g[k] = (p.g[i0] * a0 + p.g[i1] * a1 + p.g[i2] * a2 + p.g[i3] * a3) / sa;
+      q.b[k] = (p.b[i0] * a0 + p.b[i1] * a1 + p.b[i2] * a2 + p.b[i3] * a3) / sa;
+      q.a[k] = (sa - 0.04) / 4;
     }
-    const out = new Uint8Array(ww * ww * 4);
-    for (let i = 0; i < ww * ww; i++) {
-      out[i * 4] = rr[i]; out[i * 4 + 1] = gg[i]; out[i * 4 + 2] = bb[i]; out[i * 4 + 3] = Math.min(255, a[i]);
-    }
-    return out;
-  };
-  const mips: { data: Uint8Array; width: number; height: number }[] = [{ data: pack(w), width: w, height: w }];
-  while (w > 1) {
-    const h2 = w >> 1;
-    const nr = new Float32Array(h2 * h2), ng = new Float32Array(h2 * h2), nb = new Float32Array(h2 * h2), na = new Float32Array(h2 * h2);
-    for (let y = 0; y < h2; y++) for (let x = 0; x < h2; x++) {
-      let sa = 0, sr = 0, sg = 0, sb = 0;
-      for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
-        const j = (y * 2 + dy) * w + x * 2 + dx;
-        const wa = a[j] + 0.01;
-        sa += a[j]; sr += r[j] * wa; sg += g[j] * wa; sb += b[j] * wa;
-      }
-      const tot = sa + 0.04;
-      const i = y * h2 + x;
-      na[i] = sa / 4; nr[i] = sr / tot; ng[i] = sg / tot; nb[i] = sb / tot;
-    }
-    w = h2; r = nr; g = ng; b = nb; a = na;
     const cs = w / cells;
-    if (cs >= 2) {
-      for (let i = 0; i < cells * cells; i++) {
-        const cx = (i % cells) * cs, cy = Math.floor(i / cells) * cs;
-        if (cover(a, w, cx, cy, cs, 1) >= target[i]) continue;
-        let lo = 1, hi = 8;
-        for (let it = 0; it < 10; it++) { const mid = (lo + hi) / 2; if (cover(a, w, cx, cy, cs, mid) < target[i]) lo = mid; else hi = mid; }
-        for (let y = cy; y < cy + cs; y++) for (let x = cx; x < cx + cs; x++) a[y * w + x] = Math.min(255, a[y * w + x] * hi);
-      }
+    if (cs >= 2) for (let i = 0; i < cells * cells; i++) {
+      const cx = (i % cells) * cs, cy = Math.floor(i / cells) * cs;
+      if (cover(q, cx, cy, cs, 1) >= target[i]) continue;
+      let lo = 1, hi = 8;
+      for (let it = 0; it < 9; it++) { const mid = (lo + hi) / 2; if (cover(q, cx, cy, cs, mid) < target[i]) lo = mid; else hi = mid; }
+      for (let y = cy; y < cy + cs; y++) for (let x = cx; x < cx + cs; x++) { const k = y * w + x; q.a[k] = Math.min(255, q.a[k] * hi); }
     }
-    mips.push({ data: pack(w), width: w, height: w });
+    levels.push(q);
   }
-  // note: cells are addressed from the top in cellUV, matching the flipped rows above
+  // pack; transparent pixels take the (alpha-weighted) colour from two levels down,
+  // so filtering at the edge of a needle never pulls in black
+  const mips = levels.map((lv, li) => {
+    const src2 = levels[Math.min(levels.length - 1, li + 2)];
+    const out = new Uint8Array(lv.w * lv.w * 4);
+    for (let y = 0; y < lv.w; y++) for (let x = 0; x < lv.w; x++) {
+      const k = y * lv.w + x, o = k * 4;
+      if (lv.a[k] > 8) { out[o] = lv.r[k]; out[o + 1] = lv.g[k]; out[o + 2] = lv.b[k]; }
+      else { const j = (y >> 2) * src2.w + (x >> 2); out[o] = src2.r[j]; out[o + 1] = src2.g[j]; out[o + 2] = src2.b[j]; }
+      out[o + 3] = Math.min(255, lv.a[k]);
+    }
+    return { data: out, width: lv.w, height: lv.w };
+  });
   const tex = new THREE.DataTexture(mips[0].data, W0, W0, THREE.RGBAFormat);
   tex.mipmaps = mips as unknown as THREE.DataTexture["mipmaps"];
   tex.generateMipmaps = false;

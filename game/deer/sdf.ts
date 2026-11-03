@@ -102,8 +102,33 @@ export function surfaceNets(field: ShapeField, min: Vec, max: Vec, cell: number)
   const nz = Math.ceil((max[2] - min[2]) / cell) + 1;
   const vals = new Float32Array(nx * ny * nz);
   const id = (i: number, j: number, k: number) => (i * ny + j) * nz + k;
-  for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) for (let k = 0; k < nz; k++) {
-    vals[id(i, j, k)] = field.dist(min[0] + i * cell, min[1] + j * cell, min[2] + k * cell);
+  // coarse pass every 4th point; fine points are only computed exactly near the surface
+  const S = 4;
+  const cx = Math.ceil((nx - 1) / S) + 1, cy = Math.ceil((ny - 1) / S) + 1, cz = Math.ceil((nz - 1) / S) + 1;
+  const coarse = new Float32Array(cx * cy * cz);
+  const qid = (i: number, j: number, k: number) => (i * cy + j) * cz + k;
+  for (let i = 0; i < cx; i++) for (let j = 0; j < cy; j++) for (let k = 0; k < cz; k++) {
+    coarse[qid(i, j, k)] = field.dist(min[0] + i * S * cell, min[1] + j * S * cell, min[2] + k * S * cell);
+  }
+  const far = S * cell * 1.8; // a coarse corner this far from the surface can't have it within its cell
+  for (let i = 0; i < nx; i++) {
+    const ci = Math.min(cx - 2, Math.floor(i / S)), ui = i / S - ci;
+    for (let j = 0; j < ny; j++) {
+      const cj = Math.min(cy - 2, Math.floor(j / S)), uj = j / S - cj;
+      for (let k = 0; k < nz; k++) {
+        const ck = Math.min(cz - 2, Math.floor(k / S)), uk = k / S - ck;
+        const c000 = coarse[qid(ci, cj, ck)], c100 = coarse[qid(ci + 1, cj, ck)], c010 = coarse[qid(ci, cj + 1, ck)], c110 = coarse[qid(ci + 1, cj + 1, ck)];
+        const c001 = coarse[qid(ci, cj, ck + 1)], c101 = coarse[qid(ci + 1, cj, ck + 1)], c011 = coarse[qid(ci, cj + 1, ck + 1)], c111 = coarse[qid(ci + 1, cj + 1, ck + 1)];
+        const mn = Math.min(Math.abs(c000), Math.abs(c100), Math.abs(c010), Math.abs(c110), Math.abs(c001), Math.abs(c101), Math.abs(c011), Math.abs(c111));
+        if (mn > far && Math.sign(c000) === Math.sign(c111) && Math.sign(c000) === Math.sign(c100) && Math.sign(c000) === Math.sign(c011)) {
+          const a = c000 + (c100 - c000) * ui, b = c010 + (c110 - c010) * ui, c = c001 + (c101 - c001) * ui, d = c011 + (c111 - c011) * ui;
+          const e = a + (b - a) * uj, f = c + (d - c) * uj;
+          vals[id(i, j, k)] = e + (f - e) * uk;
+        } else {
+          vals[id(i, j, k)] = field.dist(min[0] + i * cell, min[1] + j * cell, min[2] + k * cell);
+        }
+      }
+    }
   }
   // one vertex per cell that the surface passes through
   const cellVert = new Int32Array((nx - 1) * (ny - 1) * (nz - 1)).fill(-1);
@@ -159,7 +184,7 @@ export function surfaceNets(field: ShapeField, min: Vec, max: Vec, cell: number)
   for (let v = 0; v < positions.length; v += 3) {
     let x = positions[v], y = positions[v + 1], z = positions[v + 2];
     let gx = 0, gy = 0, gz = 0;
-    for (let it = 0; it < 3; it++) {
+    for (let it = 0; it < 1; it++) {
       const d = field.dist(x, y, z);
       gx = field.dist(x + e, y, z) - field.dist(x - e, y, z);
       gy = field.dist(x, y + e, z) - field.dist(x, y - e, z);

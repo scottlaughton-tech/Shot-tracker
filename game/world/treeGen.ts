@@ -307,7 +307,7 @@ function shrub(b: Builder, rnd: () => number, h: number, card: Card, cards: numb
 }
 
 /** A unit clump (1 m wide, 1 m tall) of crossed ground-plant cards: grass, goldenrod, fern. */
-export function makeClump(card: Card, cards = 3, seed = 1): THREE.BufferGeometry {
+export function makeClump(card: Card, cards = 3, seed = 1, aoBase = 0.62): THREE.BufferGeometry {
   const rnd = mulberry32(seed);
   const b = new Builder();
   for (let i = 0; i < cards; i++) {
@@ -315,7 +315,7 @@ export function makeClump(card: Card, cards = 3, seed = 1): THREE.BufferGeometry
     const side = v(Math.cos(a), 0, Math.sin(a));
     const n = v(-Math.sin(a) * 0.35, 1, Math.cos(a) * 0.35).normalize();
     const lean = v((rnd() - 0.5) * 0.15, 1, (rnd() - 0.5) * 0.15).normalize();
-    b.upCard(card, v((rnd() - 0.5) * 0.2, -0.04, (rnd() - 0.5) * 0.2), lean, side, 1, 1, n, 1, 1, 0.62);
+    b.upCard(card, v((rnd() - 0.5) * 0.2, -0.04, (rnd() - 0.5) * 0.2), lean, side, 1, 1, n, 1, 1, aoBase);
   }
   return b.build().leaf;
 }

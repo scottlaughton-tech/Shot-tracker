@@ -1,7 +1,7 @@
 // Ground mesh: a polar grid centred on the stand. The camera never moves, so rings that get
 // wider with distance give fine detail up close and coarse detail far away for free.
 import * as THREE from "three";
-import { type Ground, sampleGround } from "./layout";
+import { buildGroundCache, type Ground, sampleGround, sampleGroundFast } from "./layout";
 import { smoothstep } from "./noise";
 
 const R0 = 3;           // first ring, m
@@ -19,6 +19,7 @@ export type Terrain = {
 };
 
 export function buildTerrain(material: THREE.Material): Terrain {
+  buildGroundCache();
   const radii: number[] = [];
   for (let r = R0; r < R_MAX * RATIO_FAR; r *= r < R_FAR ? RATIO : RATIO_FAR) radii.push(r);
   const rings = radii.length;
@@ -35,7 +36,7 @@ export function buildTerrain(material: THREE.Material): Terrain {
       const a = -ANG + j * DA;
       const x = r * Math.sin(a), z = -r * Math.cos(a);
       const k = i * cols + j;
-      sampleGround(x, z, g);
+      if (r < 60) sampleGround(x, z, g); else sampleGroundFast(x, z, g);
       heights[k] = g.h;
       pos[k * 3] = x; pos[k * 3 + 1] = g.h; pos[k * 3 + 2] = z;
       mask[k * 4] = g.open;

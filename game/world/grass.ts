@@ -4,7 +4,7 @@
 // where you're looking closely and sparse far away.
 import * as THREE from "three";
 import { Card } from "./foliageTextures";
-import { sampleGround, type Ground } from "./layout";
+import { sampleGroundFast, type Ground } from "./layout";
 import { hash2, smoothstep } from "./noise";
 import { makeClump } from "./treeGen";
 import { foliageMaterial, foliageDepthMaterial } from "./vegMaterials";
@@ -18,6 +18,7 @@ type Kind = { mesh: THREE.InstancedMesh; n: number };
 export class Grass {
   readonly group = new THREE.Group();
   private grass: Kind;
+  private hay: Kind;
   private rod: Kind;
   private fern: Kind;
   private lastKey = "";
@@ -26,8 +27,8 @@ export class Grass {
   constructor(atlas: THREE.Texture, private heightAt: (x: number, z: number) => number) {
     const mat = foliageMaterial(atlas);
     const depth = foliageDepthMaterial(atlas);
-    const mk = (card: Card, cap: number, seed: number): Kind => {
-      const mesh = new THREE.InstancedMesh(makeClump(card, 3, seed), mat, cap);
+    const mk = (card: Card, cap: number, seed: number, cards = 3, aoBase = 0.62): Kind => {
+      const mesh = new THREE.InstancedMesh(makeClump(card, cards, seed, aoBase), mat, cap);
       mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       mesh.count = 0;
@@ -39,6 +40,8 @@ export class Grass {
       return { mesh, n: 0 };
     };
     this.grass = mk(Card.Grass, CAP, 3);
+    // mown hay stubble: short, narrow and evenly lit, so it doesn't line up like bricks
+    this.hay = mk(Card.Grass, 9000, 11, 4, 0.88);
     this.rod = mk(Card.Goldenrod, 3000, 5);
     this.fern = mk(Card.Fern, 2000, 7);
   }
@@ -51,7 +54,7 @@ export class Grass {
     const key = `${rMin.toFixed(0)}|${rMax.toFixed(0)}|${yaw.toFixed(3)}|${halfW.toFixed(3)}|${magnification.toFixed(1)}`;
     if (key === this.lastKey) return;
     this.lastKey = key;
-    for (const k of [this.grass, this.rod, this.fern]) k.n = 0;
+    for (const k of [this.grass, this.hay, this.rod, this.fern]) k.n = 0;
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(), col = new THREE.Color();
     const up = new THREE.Vector3(0, 1, 0);
     const g = this.g;
@@ -77,7 +80,7 @@ export class Grass {
           const x = (cx + hash2(cx, cz, level * 7 + 1)) * cell, z = (cz + hash2(cx, cz, level * 7 + 2)) * cell;
           const r = Math.hypot(x, z), a = Math.atan2(x, -z);
           if (r < r0 || r >= r1 || a < a0 || a > a1) continue;
-          sampleGround(x, z, g);
+          sampleGroundFast(x, z, g);
           const y = this.heightAt(x, z);
           const h1 = hash2(cx, cz, level * 7 + 3), h2 = hash2(cx, cz, level * 7 + 4);
           q.setFromAxisAngle(up, h1 * Math.PI * 2);
@@ -98,8 +101,20 @@ export class Grass {
           if (level >= 2 && height < 0.3) continue;
           if (level >= 2 && h1 > 0.65) continue; // thinner with distance: the ground colour carries it
           if (level >= 3 && h2 > 0.5) continue;
-          const width = Math.min(cell * (1.25 + 0.4 * h1), Math.max(0.8, height * 3));
           p.set(x, y, z);
+          if (tall < 0.35) {
+            // hay stubble: only worth drawing as clumps right up close; farther out the
+            // ground texture reads better than rows of little cards
+            if (this.hay.n >= 9000 || r / magnification > 9) continue;
+            const w = Math.min(cell * 1.15, height * 2.4);
+            s.set(w, height, w);
+            m4.compose(p, q, s);
+            const t = hash2(cx, cz, 98);
+            col.setRGB(0.92 + 0.12 * t, 0.98 + 0.08 * h2, 0.8 + 0.08 * t);
+            this.hay.mesh.setMatrixAt(this.hay.n, m4); this.hay.mesh.setColorAt(this.hay.n, col); this.hay.n++;
+            continue;
+          }
+          const width = Math.min(cell * (1.25 + 0.4 * h1), Math.max(0.8, height * 3));
           s.set(width, height * (0.7 + 0.3 * smoothstep(0.35, 0.8, g.open)), width);
           m4.compose(p, q, s);
           // colour: straw / grey-tan / russet, a touch of green in the hay
@@ -122,7 +137,7 @@ export class Grass {
       if (this.grass.n === total && r1 >= rMax) break;
       r0 = r1;
     }
-    for (const k of [this.grass, this.rod, this.fern]) {
+    for (const k of [this.grass, this.hay, this.rod, this.fern]) {
       k.mesh.count = k.n;
       k.mesh.instanceMatrix.needsUpdate = true;
       if (k.mesh.instanceColor) k.mesh.instanceColor.needsUpdate = true;

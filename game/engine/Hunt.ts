@@ -27,6 +27,8 @@ type Host = {
   roundsLeft: () => number;
   bulletsInFlight: () => number;
   setTargets: (t: Deer[]) => void;
+  /** 0..1, how far the sun has gone down; at 1 it's too dark to shoot */
+  dusk: () => number;
 };
 
 export class Hunt {
@@ -41,6 +43,7 @@ export class Hunt {
   private nextSpawn = 3;
   private endTimer = -1;
   private bannerId = 0;
+  private saidDark = false;
   private bestShot: { pts: number; text: string } | null = null;
   /** per-buck: has any shot hit it yet (for one-shot kills) */
   private pendingKill = new Map<number, { parts: Part[]; total: number; text: string }>();
@@ -80,14 +83,17 @@ export class Hunt {
     }
     const active = this.deer.filter((d) => d.alive).length;
     this.nextSpawn -= dt;
-    if (this.spawned < BUCKS_PER_HUNT && this.nextSpawn <= 0 && (active === 0 || (active < 2 && this.rnd() < 0.3)) && this.host.roundsLeft() > 0) {
+    const dark = this.host.dusk() >= 1;
+    if (dark && !this.saidDark) { this.saidDark = true; this.banner({ title: "Last light", detail: "Too dark to shoot. The hunt is over.", tone: "info" }); }
+    // a new buck every ~25 s through the last hour of light, at most three in view
+    if (!dark && this.spawned < BUCKS_PER_HUNT && this.nextSpawn <= 0 && active < 3 && this.host.roundsLeft() > 0) {
       this.spawn();
-      this.nextSpawn = 9 + this.rnd() * 14;
+      this.nextSpawn = (active === 0 ? 14 : 20) + this.rnd() * 16;
     }
     // the hunt ends when the rifle is empty (and every hit buck is accounted for) or the light is gone
     const unresolved = this.deer.some((d) => d.alive && (d.wounded || d.lethal));
     const outOfAmmo = this.host.roundsLeft() <= 0 && this.host.bulletsInFlight() === 0 && !unresolved;
-    const allDone = this.spawned >= BUCKS_PER_HUNT && this.deer.every((d) => !d.alive || d.gone) && !unresolved;
+    const allDone = (this.spawned >= BUCKS_PER_HUNT || dark) && this.deer.every((d) => !d.alive || d.gone || dark) && !unresolved;
     if ((outOfAmmo || allDone) && this.endTimer < 0) this.endTimer = outOfAmmo ? 3.5 : 2;
     if (this.endTimer >= 0) {
       this.endTimer -= dt;
@@ -110,6 +116,7 @@ export class Hunt {
   private onHit(deer: Deer, info: HitInfo) {
     const r = this.results.get(deer.id)!;
     r.shots++;
+    (r.marks ??= []).push({ y: info.local.y, z: info.local.z, zone: info.primary });
     const z = ZONES[info.primary];
     const rangeTxt = `${Math.round(info.range)} m`;
     const rack = `${deer.rack.points}-pt`;

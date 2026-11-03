@@ -16,6 +16,8 @@ export type SkySetup = {
   sunDir: THREE.Vector3;
   fogColor: THREE.Color;
   update: (t: number) => void;
+  /** 0 = start of the hunt, 1 = the sun is nearly down */
+  setLight: (dusk: number) => void;
 };
 
 const cloudVert = /* glsl */ `
@@ -117,5 +119,18 @@ export function buildSky(scene: THREE.Scene, opts: { azimuth: number; elevation:
   return {
     sky, clouds, sun, hemi, sunDir, fogColor,
     update: (t: number) => { (clouds.material as THREE.ShaderMaterial).uniforms.uTime.value = t; },
+    setLight: (dusk: number) => {
+      // the sun sinks toward the treeline; light gets warmer and weaker
+      const el = opts.elevation + (2.5 - opts.elevation) * dusk;
+      sunDir.copy(sunDirection(opts.azimuth + 6 * dusk, el));
+      u.sunPosition.value.copy(sunDir);
+      (clouds.material as THREE.ShaderMaterial).uniforms.uSunDir.value = sunDir;
+      sun.color.setRGB(1.0, 0.86 - 0.2 * dusk, 0.68 - 0.3 * dusk);
+      sun.intensity = 3.2 * (1 - 0.55 * dusk);
+      hemi.intensity = 1.5 * (1 - 0.45 * dusk);
+      hemi.color.setRGB(0.62 - 0.08 * dusk, 0.72 - 0.12 * dusk, 0.92 - 0.1 * dusk);
+      const fog = scene.fog as THREE.FogExp2;
+      fog.color.copy(fogColor).lerp(new THREE.Color(0.6, 0.55, 0.55), dusk * 0.6);
+    },
   };
 }

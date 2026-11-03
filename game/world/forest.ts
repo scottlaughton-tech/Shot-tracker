@@ -2,7 +2,7 @@
 // model (close, or anywhere the scope is looking) or as a flat camera-facing impostor.
 // The camera never moves, so "close" is measured as distance ÷ magnification.
 import * as THREE from "three";
-import { ISLANDS, sampleGround, type Ground, STAND } from "./layout";
+import { ISLANDS, sampleGroundFast, type Ground, STAND } from "./layout";
 import { hash2, mulberry32, smoothstep } from "./noise";
 import { barkTexture } from "./foliageTextures";
 import type { Photos } from "./photoTextures";
@@ -96,6 +96,8 @@ export class Forest {
   constructor(private renderer: THREE.WebGLRenderer, private heightAt: (x: number, z: number) => number) {}
 
   async build(atlas: THREE.Texture, progress: (f: number) => void, photos: Photos | null = null) {
+    const T = (label: string) => { if (location.search.includes("debug")) console.log(`[t]   forest ${label}: ${(performance.now() - t0).toFixed(0)} ms`); };
+    const t0 = performance.now();
     // photo bark where we have it (birch stays drawn: its white bark is distinctive enough)
     const barks = new Map<BarkKind, BarkLook>();
     const c = (hex: string) => new THREE.Color(hex);
@@ -121,6 +123,7 @@ export class Forest {
       modelIndex.set(sp, list);
     }
     progress(0.3);
+    T("models");
     await new Promise((r) => setTimeout(r, 0));
 
     // 2. placement on a jittered grid, denser near the field edge where it can be seen
@@ -131,7 +134,7 @@ export class Forest {
       if (r < 9) return;
       const azim = Math.atan2(x, -z);
       if (Math.abs(azim) > ANG) return;
-      sampleGround(x, z, g);
+      sampleGroundFast(x, z, g);
       const inHedge = g.hedge > 0.3, inSwale = g.swale > 0.3;
       const forest = g.edge < 1.5;
       if (!forest && !inHedge && !inSwale) return;
@@ -172,6 +175,7 @@ export class Forest {
         cell(cx, cz, S1);
       }
     progress(0.6);
+    T("near placement");
     await new Promise((r) => setTimeout(r, 0));
     const S2 = 8;
     for (let cz = Math.floor(-1750 / S2); cz < 0; cz++)
@@ -190,7 +194,7 @@ export class Forest {
         if (r > 1100 || r < 30) continue;
         const azim = Math.atan2(x, -z);
         if (Math.abs(azim) > ANG) continue;
-        sampleGround(x, z, g);
+        sampleGroundFast(x, z, g);
         if (g.edge < -6 || g.edge > 0.5 || g.hedge > 0.3 || g.swale > 0.3) continue;
         if (r < 55 && Math.abs(azim) < 0.95) continue;
         const h = hash2(cx, cz, 33);
@@ -213,11 +217,13 @@ export class Forest {
       }
     }
     progress(0.7);
+    T("all placement");
     await new Promise((r) => setTimeout(r, 0));
 
     // 3. impostors
     const { albedo, normals, cells } = this.bakeImpostors(atlas, barks);
     progress(0.9);
+    T("impostors");
 
     // 4. meshes
     const leafMat = foliageMaterial(atlas);

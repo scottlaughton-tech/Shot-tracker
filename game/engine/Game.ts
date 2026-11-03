@@ -114,7 +114,14 @@ export class Game {
 
   /** Build the world. Calls onProgress(0..1) as it goes. */
   async init(onProgress: (f: number, label: string) => void) {
-    const step = async (f: number, label: string) => { onProgress(f, label); await new Promise((r) => setTimeout(r, 0)); };
+    let tPrev = performance.now(), lastLabel = "start";
+    const step = async (f: number, label: string) => {
+      const now = performance.now();
+      if (location.search.includes("debug")) console.log(`[t] ${lastLabel}: ${(now - tPrev).toFixed(0)} ms`);
+      tPrev = now; lastLabel = label;
+      onProgress(f, label);
+      await new Promise((r) => setTimeout(r, 0));
+    };
     await step(0.05, "Sky");
     this.sky = buildSky(this.scene, { azimuth: 222, elevation: 13 });
     await step(0.08, "Textures");
@@ -127,7 +134,8 @@ export class Game {
     this.wideCam.position.copy(this.eye);
     this.scopeCam.position.copy(this.eye);
     await step(0.25, "Trees");
-    const atlas = foliageAtlas();
+    const atlas = await foliageAtlas();
+    await step(0.3, "Trees");
     this.forest = new Forest(this.renderer, this.terrain.heightAt);
     await this.forest.build(atlas, (f) => onProgress(0.25 + f * 0.65, "Trees"), this.photos);
     this.scene.add(this.forest.group);
@@ -342,6 +350,9 @@ export class Game {
     this.chamber = "ready";
     this.bullets = [];
     this.endedSent = false;
+    this.paused = false;
+    this.huntTime = 0;
+    this.sky.setLight(0);
     this.hunt = new Hunt({
       scene: this.scene,
       heightAt: this.terrain.heightAt,
@@ -349,11 +360,16 @@ export class Game {
       roundsLeft: () => this.rounds,
       bulletsInFlight: () => this.bullets.length,
       setTargets: (t) => { this.targets = t; },
+      dusk: () => this.huntTime / Game.HUNT_LENGTH,
     }, this.deerAsset, this.events.banner, this.events.score);
     this.events.score(0);
     this.pushHud();
   }
   private endedSent = false;
+  /** paused: the world keeps drawing but nothing moves (menu open, app in background) */
+  paused = false;
+  private huntTime = 0;
+  static HUNT_LENGTH = 330; // seconds of "last light"
 
   // ---------- frame ----------
 
@@ -405,6 +421,7 @@ export class Game {
 
   private frames = 0;
   private tick(dt: number, draw = true) {
+    if (this.paused) { if (draw) this.render(); return; }
     this.time += dt;
     if (++this.frames % 60 === 0 && location.search.includes("debug")) console.log(`[g] frame dt ${(dt * 1000).toFixed(0)} ms, calls ${this.renderer.info.render.calls}, tris ${this.renderer.info.render.triangles}`);
     if (this.chamber === "cycling" || this.chamber === "reloading") {
@@ -424,6 +441,8 @@ export class Game {
 
     this.updateBullets(dt);
     if (this.hunt) {
+      this.huntTime += dt;
+      if (this.frames % 30 === 0) this.sky.setLight(Math.min(1, this.huntTime / Game.HUNT_LENGTH));
       this.hunt.update(dt);
       if (this.hunt.over && !this.endedSent) { this.endedSent = true; this.scoped = false; this.pushHud(); this.events.end(this.hunt.summary()); }
     }

@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node --test --experimental-strip-types lib/*.test.ts game/*.test.ts"
+    "test": "node --test --experimental-strip-types lib/*.test.ts game/*.test.ts",
+    "bake-atlas": "node scripts/bake-atlas.cjs"
   },
   "dependencies": {
     "@upstash/redis": "^1.41.0",

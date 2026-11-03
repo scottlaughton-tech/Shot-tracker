@@ -12,7 +12,7 @@ import { snortSound } from "../engine/audio";
 
 export type DeerState = "travel" | "feed" | "look" | "alert" | "flee" | "kick" | "wounded" | "dying" | "dead" | "gone";
 
-export type HitInfo = { zones: Zone[]; primary: Zone; outcome: Outcome; range: number; gait: Gait; point: THREE.Vector3 };
+export type HitInfo = { zones: Zone[]; primary: Zone; outcome: Outcome; range: number; gait: Gait; point: THREE.Vector3; local: { y: number; z: number } };
 
 export type DeerEvents = {
   hit: (d: Deer, info: HitInfo) => void;
@@ -264,7 +264,9 @@ export class Deer {
     if (!this.alive) return;
     this.hits++;
     const outcome = ZONES[primary].outcome;
-    const info: HitInfo = { zones, primary, outcome, range: point.distanceTo(this.world.eye), gait: this.gait, point };
+    // entry point in the buck's own frame, for the shot-placement diagram
+    const lp = this.rig.root.worldToLocal(point.clone());
+    const info: HitInfo = { zones, primary, outcome, range: point.distanceTo(this.world.eye), gait: this.gait, point, local: { y: lp.y, z: lp.z } };
     this.events.hit(this, info);
     if (outcome === "none") { this.flee(); return; }
     if (outcome === "wound") {

@@ -7,6 +7,7 @@ import type { Game, Hud } from "../engine/Game";
 import type { Banner, HuntSummary } from "../engine/Hunt";
 import type { GameScore } from "@/lib/store";
 import { isMuted, setMuted, startAmbience, unlockAudio } from "../engine/audio";
+import DeerDiagram from "./DeerDiagram";
 
 type Screen = "menu" | "play" | "results" | "board" | "help";
 
@@ -72,12 +73,19 @@ export default function GameRoot() {
     check();
     window.addEventListener("resize", check);
     window.addEventListener("orientationchange", check);
+    const vis = () => {
+      const g = gameRef.current;
+      if (!g) return;
+      if (document.hidden) { g.paused = true; g.endAim(); aimPointer.current = null; setScreen((s) => (s === "play" ? "menu" : s)); }
+    };
+    document.addEventListener("visibilitychange", vis);
     const stop = (e: Event) => e.preventDefault(); // iOS pinch-zoom
     document.addEventListener("gesturestart", stop);
     return () => {
       window.removeEventListener("resize", check);
       window.removeEventListener("orientationchange", check);
       document.removeEventListener("gesturestart", stop);
+      document.removeEventListener("visibilitychange", vis);
     };
   }, []);
 
@@ -141,7 +149,7 @@ export default function GameRoot() {
       {screen === "play" && (
         <div className="game-touch" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
           <div className="g-top">
-            <button className="g-quit" onPointerDown={(e) => e.stopPropagation()} onClick={() => setScreen("menu")} aria-label="Pause">❚❚</button>
+            <button className="g-quit" onPointerDown={(e) => e.stopPropagation()} onClick={() => { if (gameRef.current) { gameRef.current.endAim(); gameRef.current.paused = true; } setScreen("menu"); }} aria-label="Pause">❚❚</button>
             <button className="g-quit" onPointerDown={(e) => e.stopPropagation()} onClick={() => { setMuted(!isMuted()); setMute(isMuted()); }} aria-label={mute ? "Sound on" : "Sound off"}>{mute ? "🔇" : "🔊"}</button>
             {hud && <Ammo hud={hud} />}
           </div>
@@ -174,7 +182,7 @@ export default function GameRoot() {
             {error ? <p className="g-error">{error}</p> : (
               <>
                 {hud && gameRef.current?.hunt && !gameRef.current.hunt.over && (
-                  <button className="g-btn primary" onClick={() => setScreen("play")}>Back to the hunt</button>
+                  <button className="g-btn primary" onClick={() => { if (gameRef.current) gameRef.current.paused = false; setScreen("play"); }}>Back to the hunt</button>
                 )}
                 <button className={`g-btn ${gameRef.current?.hunt && !gameRef.current.hunt.over ? "" : "primary"}`} disabled={!ready} onClick={startHunt}>
                   {ready ? (gameRef.current?.hunt ? "Start a new hunt" : "Start the hunt") : `Building the woods… ${Math.round(progress.f * 100)}%`}
@@ -251,7 +259,12 @@ function Results({ summary, onAgain, onBoard, onMenu }: { summary: HuntSummary; 
             {summary.bucks.map((b) => (
               <div key={b.id} className={`g-buck ${b.status}`}>
                 <div className="row between"><b>{b.antlerPoints}-point buck</b><b>{b.score > 0 ? "+" : ""}{b.score}</b></div>
-                {b.parts.map((p, i) => <div key={i} className="row between g-part"><span>{p.label}</span><span>{p.pts > 0 ? "+" : ""}{p.pts}</span></div>)}
+                <div className="g-buck-body">
+                  {b.marks && b.marks.length > 0 && <DeerDiagram marks={b.marks} />}
+                  <div className="g-parts">
+                    {b.parts.map((p, i) => <div key={i} className="row between g-part"><span>{p.label}</span><span>{p.pts > 0 ? "+" : ""}{p.pts}</span></div>)}
+                  </div>
+                </div>
               </div>
             ))}
           </div>

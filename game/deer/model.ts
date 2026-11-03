@@ -198,7 +198,9 @@ function furMaterial(noise: THREE.Texture | null): THREE.MeshPhysicalMaterial {
 export function buildDeerAsset(noise: THREE.Texture | null): DeerAsset {
   const min: Vec = [-0.26, -0.02, -0.82], max: Vec = [0.26, 1.5, 1.1];
   const field = new ShapeField(BODY, min, max, 0.06);
+  const t0 = performance.now();
   const raw = surfaceNets(field, min, max, 0.0105);
+  const t1 = performance.now();
   const nVert = raw.positions.length / 3;
   const boneNames = JOINTS.map((j) => j.name);
   const boneIndex = new Map(boneNames.map((n, i) => [n, i]));
@@ -231,6 +233,7 @@ export function buildDeerAsset(noise: THREE.Texture | null): DeerAsset {
     tmp.setRGB(c[0] * ao, c[1] * ao, c[2] * ao, THREE.SRGBColorSpace);
     colors[v * 3] = tmp.r; colors[v * 3 + 1] = tmp.g; colors[v * 3 + 2] = tmp.b;
   }
+  if (typeof location !== "undefined" && location.search.includes("debug")) console.log(`[t]   deer mesh ${(t1 - t0).toFixed(0)} ms, skin+colour ${(performance.now() - t1).toFixed(0)} ms`);
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.BufferAttribute(raw.positions, 3));
   geo.setAttribute("normal", new THREE.BufferAttribute(raw.normals, 3));

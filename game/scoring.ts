@@ -74,6 +74,8 @@ export type BuckResult = {
   shots: number;
   score: number;
   parts: Part[];
+  /** where each bullet went in, side view in the buck's own metres (z forward, y up) */
+  marks?: { y: number; z: number; zone: Zone }[];
 };
 
 export function woundedEscape(): { total: number; parts: Part[] } {

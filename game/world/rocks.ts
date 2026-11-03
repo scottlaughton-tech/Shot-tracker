@@ -2,7 +2,7 @@
 // glacial erratics out in the field. Lumpy displaced spheres, textured with a triplanar
 // photo texture and lichen patches.
 import * as THREE from "three";
-import { sampleGround, STAND, type Ground } from "./layout";
+import { sampleGroundFast, STAND, type Ground } from "./layout";
 import { hash2, makeNoise2D, mulberry32 } from "./noise";
 import type { Photos } from "./photoTextures";
 
@@ -83,7 +83,7 @@ export class Rocks {
       const x = (cx + hash2(cx, cz, 71)) * S, z = (cz + hash2(cx, cz, 72)) * S;
       if (Math.hypot(x, z) > 1150) continue;
       const h = hash2(cx, cz, 73);
-      sampleGround(x, z, g);
+      sampleGroundFast(x, z, g);
       const atEdge = g.edge > -10 && g.edge < 5;
       const chance = atEdge ? 0.09 : g.open < 0.3 ? 0.025 : 0.004;
       if (h > chance) continue;
@@ -94,7 +94,7 @@ export class Rocks {
     for (let i = 0; i < 14; i++) {
       const a = (rnd() - 0.5) * 1.2, r = 90 + rnd() * 800;
       const x = r * Math.sin(a), z = -r * Math.cos(a);
-      if (sampleGround(x, z, g).open > 0.9) add(x, z, 1.2 + rnd() * 1.6);
+      if (sampleGroundFast(x, z, g).open > 0.9) add(x, z, 1.2 + rnd() * 1.6);
     }
     // one right in front of the stand for scale
     add(-9, -14, 1.1);

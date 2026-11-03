@@ -138,3 +138,44 @@ function heightFrom(x: number, z: number, r: number, open: number, swale: number
 export function terrainHeight(x: number, z: number): number {
   return sampleGround(x, z).h;
 }
+
+// ---------- fast lookups ----------
+// Terrain, trees, rocks and grass ask about the ground hundreds of thousands of times.
+// sampleGround is computed once on a 4 m grid over the field and its edges, then read back
+// with bilinear interpolation (the shapes it describes are all much bigger than 4 m).
+const GC = { x0: -1150, z0: -1250, x1: 1150, z1: 40, step: 4 };
+let gcData: Float32Array | null = null;
+let gcW = 0, gcH = 0;
+const FIELDS = 6; // h, edge, tall, hedge, swale, (pad)
+
+export function buildGroundCache() {
+  if (gcData) return;
+  gcW = Math.round((GC.x1 - GC.x0) / GC.step) + 1;
+  gcH = Math.round((GC.z1 - GC.z0) / GC.step) + 1;
+  gcData = new Float32Array(gcW * gcH * FIELDS);
+  const g: Ground = { h: 0, edge: 0, open: 0, tall: 0, hedge: 0, swale: 0 };
+  for (let j = 0; j < gcH; j++) for (let i = 0; i < gcW; i++) {
+    sampleGround(GC.x0 + i * GC.step, GC.z0 + j * GC.step, g);
+    const k = (j * gcW + i) * FIELDS;
+    gcData[k] = g.h; gcData[k + 1] = g.edge; gcData[k + 2] = g.tall; gcData[k + 3] = g.hedge; gcData[k + 4] = g.swale;
+  }
+}
+
+/** Same as sampleGround, from the cache when the point is inside it. */
+export function sampleGroundFast(x: number, z: number, out: Ground = { h: 0, edge: 0, open: 0, tall: 0, hedge: 0, swale: 0 }): Ground {
+  if (!gcData) return sampleGround(x, z, out);
+  const fx = (x - GC.x0) / GC.step, fz = (z - GC.z0) / GC.step;
+  const i = Math.floor(fx), j = Math.floor(fz);
+  if (i < 0 || j < 0 || i >= gcW - 1 || j >= gcH - 1) return sampleGround(x, z, out);
+  const u = fx - i, v = fz - j;
+  const k00 = (j * gcW + i) * FIELDS, k10 = k00 + FIELDS, k01 = k00 + gcW * FIELDS, k11 = k01 + FIELDS;
+  const d = gcData;
+  const lerp4 = (o: number) => (d[k00 + o] * (1 - u) + d[k10 + o] * u) * (1 - v) + (d[k01 + o] * (1 - u) + d[k11 + o] * u) * v;
+  out.h = lerp4(0);
+  out.edge = lerp4(1);
+  out.open = smoothstep(-4, 6, out.edge);
+  out.tall = lerp4(2);
+  out.hedge = lerp4(3);
+  out.swale = lerp4(4);
+  return out;
+}

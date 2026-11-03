@@ -9,7 +9,7 @@ import { buildAntlers, antlerMaterial } from "../deer/antlers";
 import { noiseTexture } from "../world/textures";
 import { DeerAnimator, type AnimInput } from "../deer/anim";
 
-export function mountPreview(el: HTMLElement, what: string) {
+export async function mountPreview(el: HTMLElement, what: string) {
   const w = el.clientWidth || 1024, h = window.innerHeight || 768;
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(w, h);
@@ -31,7 +31,7 @@ export function mountPreview(el: HTMLElement, what: string) {
   const cam = new THREE.PerspectiveCamera(40, w / h, 0.1, 1000);
 
   if (what === "trees") {
-    const atlas = foliageAtlas();
+    const atlas = await foliageAtlas();
     const leaf = foliageMaterial(atlas);
     const barks = new Map<BarkKind, THREE.Material>();
     const list: Species[] = ["spruce", "fir", "whitepine", "cedar", "tamarack", "maple", "birch", "oak", "beech", "sapling", "dogwood", "alder", "sumac", "juniper"];
