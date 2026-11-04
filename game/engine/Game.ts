@@ -2,7 +2,7 @@
 // bullets, effects and the deer. React (game/ui) talks to it through the public methods
 // and gets HUD updates through the `events` callbacks.
 import * as THREE from "three";
-import { buildSky, type SkySetup } from "../world/sky";
+import { buildSky, skyEnvironment, type SkySetup } from "../world/sky";
 import { buildTerrain, type Terrain } from "../world/terrain";
 import { groundMaterial } from "../world/groundMaterial";
 import { noiseTexture } from "../world/textures";
@@ -20,7 +20,7 @@ import { dropTable, LOAD_308, stepBullet, zeroAngle, type BulletState } from "..
 import { buildDeerAsset, type DeerAsset } from "../deer/model";
 import type { Deer } from "../deer/Deer";
 import { Hunt, type Banner, type HuntSummary } from "./Hunt";
-import { boltSound, hitSound, impactSound, reloadSound, shotSound } from "./audio";
+import { boltSound, hitSound, impactSound, reloadSound, setListenerYaw, shotSound } from "./audio";
 
 export const WIDE_HFOV = 70; // degrees across the screen in the open view
 export const ZOOMS = [4, 6, 8, 12, 16];
@@ -126,6 +126,12 @@ export class Game {
     };
     await step(0.05, "Sky");
     this.sky = buildSky(this.scene, { azimuth: 236, elevation: 12 }); // early-November late afternoon, WSW
+    if (!location.search.includes("noenv")) {
+      this.env = skyEnvironment(this.renderer, this.scene, this.sky);
+      this.env.update(0);
+      this.scene.environmentIntensity = Number(new URLSearchParams(location.search).get("env")) || 0.07; // the sky model is very bright; a little goes a long way
+      this.sky.hemi.intensity *= 0.45; // the sky light now comes from the environment; keep some ground bounce
+    }
     await step(0.08, "Textures");
     this.photos = await loadPhotos(this.renderer.capabilities.getMaxAnisotropy(), (d, n) => onProgress(0.08 + 0.1 * (d / n), "Textures"));
     await step(0.18, "Ground");
@@ -335,7 +341,7 @@ export class Game {
           const hp = a.clone().lerp(b, best.t);
           this.effects.hair(hp);
           const range = hp.distanceTo(this.eye);
-          hitSound(range / 337, range);
+          hitSound(range / 337, range, Math.atan2(hp.x - this.eye.x, -(hp.z - this.eye.z)));
           break;
         }
         // passing the buck it was aimed at: note how far off it was
@@ -349,7 +355,7 @@ export class Game {
           p.y = this.terrain.heightAt(p.x, p.z);
           this.effects.dust(p);
           const range = p.distanceTo(this.eye);
-          if (range < 450) impactSound(range / 337, range);
+          if (range < 450) impactSound(range / 337, range, Math.atan2(p.x - this.eye.x, -(p.z - this.eye.z)));
           // landed short of the buck it was aimed at: that's a low miss
           if (bl.aimed && bl.miss === null) bl.miss = p.distanceTo(this.eye) < bl.aimedDist - 3 ? `low – hit the dirt in front of him. He was ${Math.round(bl.aimedDist / 5) * 5} m away` : "";
           this.hunt?.impact(p, bl.miss ?? "");
@@ -396,6 +402,7 @@ export class Game {
     this.paused = false;
     this.huntTime = 0;
     this.sky.setLight(0);
+    if (this.env) { this.sky.hemi.intensity *= 0.45; this.env.update(0); }
     this.hunt = new Hunt({
       scene: this.scene,
       heightAt: this.terrain.heightAt,
@@ -409,6 +416,7 @@ export class Game {
     this.pushHud();
   }
   private endedSent = false;
+  private env: { update: (dusk: number) => void } | null = null;
   /** paused: the world keeps drawing but nothing moves (menu open, app in background) */
   paused = false;
   private huntTime = 0;
@@ -482,10 +490,15 @@ export class Game {
     r.pitch *= Math.exp(-dt * 5.5); r.yaw *= Math.exp(-dt * 5.5);
     r.shake *= Math.exp(-dt * 9);
 
+    setListenerYaw(this.scoped ? this.aimYaw : 0);
     this.updateBullets(dt);
     if (this.hunt) {
       this.huntTime += dt;
-      if (this.frames % 30 === 0) this.sky.setLight(Math.min(1, this.huntTime / Game.HUNT_LENGTH));
+      if (this.frames % 30 === 0) {
+        const dusk = Math.min(1, this.huntTime / Game.HUNT_LENGTH);
+        this.sky.setLight(dusk);
+        if (this.env) { this.sky.hemi.intensity *= 0.45; this.env.update(dusk); }
+      }
       this.hunt.update(dt);
       if (this.hunt.over && !this.endedSent) { this.endedSent = true; this.endAim(true); this.events.end(this.hunt.summary()); }
     }

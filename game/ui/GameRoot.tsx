@@ -51,7 +51,10 @@ export default function GameRoot() {
           end: (s) => { setSummary(s); setScreen("results"); aimPointer.current = null; },
         });
         gameRef.current = game;
-        if (location.search.includes("debug")) (window as unknown as { __game: Game }).__game = game;
+        if (location.search.includes("debug")) {
+          (window as unknown as { __game: Game }).__game = game;
+          (window as unknown as { __audio: unknown }).__audio = await import("../engine/audio");
+        }
         await game.init((f, label) => setProgress({ f, label }));
         if (disposed) return;
         game.start();
@@ -322,7 +325,9 @@ function HowTo({ onClose }: { onClose: () => void }) {
       <div className="g-card wide g-help">
         <h1>How to play</h1>
         <ul>
-          <li><b>Look:</b> touch and hold anywhere to bring up the scope. Slide your finger to aim. Lift it to lower the rifle.</li>
+          <li><b>Look:</b> touch and hold anywhere to bring up the scope. Slide your finger to aim. Lift it to lower the rifle.
+            Run out of room? Lift and touch again quickly and the scope stays where it was.</li>
+          <li><b>Listen:</b> a grunt or a snapping stick means a buck is close. The sound comes from his side.</li>
           <li><b>Shoot:</b> with your other thumb, press the red <b>FIRE</b> button.</li>
           <li><b>Zoom:</b> <b>+</b> and <b>−</b> change the scope from 4× to 16×.</li>
           <li><b>Bullet drop:</b> the rifle is a .308 sighted in at 200 m. Farther than that, the bullet drops. Use the marks under the crosshair: <b>3</b> is for 300 m, <b>4</b> for 400 m, and so on.</li>
@@ -331,6 +336,7 @@ function HowTo({ onClose }: { onClose: () => void }) {
           <li><b>Where to hit:</b> behind the shoulder (heart and lungs) or the head scores best. Neck and spine drop him. Gut, rump and legs only wound. A wounded buck runs, so finish him or lose points.</li>
           <li><b>Score:</b> every buck down earns points, plus more for a better hit, a longer shot, a moving buck, a one-shot kill and a bigger rack.</li>
           <li>You have <b>10 rounds</b>: 5 in the rifle and 5 more. Reloading takes a few seconds.</li>
+          <li>The sun is going down. When it's too dark to shoot, the hunt is over.</li>
         </ul>
         <button className="g-btn primary" onClick={onClose}>Got it</button>
       </div>

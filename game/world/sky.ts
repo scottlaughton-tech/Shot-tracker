@@ -134,3 +134,32 @@ export function buildSky(scene: THREE.Scene, opts: { azimuth: number; elevation:
     },
   };
 }
+
+/**
+ * Image-based light from the sky itself: everything gets soft blue light from above and
+ * warmer light from the sun's side, instead of one flat fill colour. Rebuilt (cheaply, on the
+ * GPU) when the sun has moved.
+ */
+export function skyEnvironment(renderer: THREE.WebGLRenderer, scene: THREE.Scene, sky: SkySetup) {
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const envScene = new THREE.Scene();
+  const envSky = new Sky();
+  envSky.material = sky.sky.material; // same uniforms, so it follows the sun
+  envSky.scale.setScalar(50);
+  envScene.add(envSky);
+  // a dull brown ground below the horizon (light bounced off the field)
+  const ground = new THREE.Mesh(new THREE.SphereGeometry(40, 32, 16, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2),
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(0.16, 0.13, 0.09), side: THREE.BackSide }));
+  envScene.add(ground);
+  let rt: THREE.WebGLRenderTarget | null = null;
+  let last = -1;
+  const update = (dusk: number) => {
+    if (Math.abs(dusk - last) < 0.04) return;
+    last = dusk;
+    const next = pmrem.fromScene(envScene, 0, 0.1, 200);
+    scene.environment = next.texture;
+    rt?.dispose();
+    rt = next;
+  };
+  return { update };
+}

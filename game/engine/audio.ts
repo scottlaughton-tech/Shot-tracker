@@ -7,6 +7,16 @@ let verb: ConvolverNode | null = null;
 let muted = false;
 let ambientOn = false;
 let ambientNodes: AudioScheduledSourceNode[] = [];
+let listenerYaw = 0;
+
+/** Which way the player is looking (radians, 0 = north). Sounds are panned left/right from it. */
+export function setListenerYaw(yaw: number) { listenerYaw = yaw; }
+
+/** Stereo position for a sound coming from world azimuth `az` (radians from north). */
+function panFor(az: number | undefined): number {
+  if (az == null) return 0;
+  return Math.max(-0.9, Math.min(0.9, Math.sin(az - listenerYaw) * 1.3));
+}
 
 function noiseBuffer(c: AudioContext, seconds: number, color: "white" | "pink" = "white"): AudioBuffer {
   const buf = c.createBuffer(1, Math.ceil(c.sampleRate * seconds), c.sampleRate);
@@ -52,13 +62,15 @@ export function setMuted(m: boolean) {
 }
 export const isMuted = () => muted;
 
-function out(node: AudioNode, wet = 0) {
+function out(node: AudioNode, wet = 0, pan = 0) {
   if (!ctx || !master) return;
-  node.connect(master);
-  if (wet > 0 && verb) { const g = ctx.createGain(); g.gain.value = wet; node.connect(g).connect(verb); }
+  let dry: AudioNode = node;
+  if (pan && ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = pan; node.connect(p); dry = p; }
+  dry.connect(master);
+  if (wet > 0 && verb) { const g = ctx.createGain(); g.gain.value = wet; dry.connect(g).connect(verb); }
 }
 
-function burst(at: number, dur: number, gain: number, filter: BiquadFilterType, freq: number, q = 0.7, wet = 0, decay = 30) {
+function burst(at: number, dur: number, gain: number, filter: BiquadFilterType, freq: number, q = 0.7, wet = 0, decay = 30, pan = 0) {
   if (!ctx) return;
   const src = ctx.createBufferSource();
   src.buffer = noiseBuffer(ctx, dur);
@@ -69,11 +81,11 @@ function burst(at: number, dur: number, gain: number, filter: BiquadFilterType, 
   g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
   g.gain.setTargetAtTime(0, at, 1 / decay);
   src.connect(f).connect(g);
-  out(g, wet);
+  out(g, wet, pan);
   src.start(at); src.stop(at + dur + 0.05);
 }
 
-function tone(at: number, f0: number, f1: number, dur: number, gain: number, type: OscillatorType = "sine", wet = 0) {
+function tone(at: number, f0: number, f1: number, dur: number, gain: number, type: OscillatorType = "sine", wet = 0, pan = 0) {
   if (!ctx) return;
   const o = ctx.createOscillator(); o.type = type;
   o.frequency.setValueAtTime(f0, at);
@@ -83,7 +95,7 @@ function tone(at: number, f0: number, f1: number, dur: number, gain: number, typ
   g.gain.linearRampToValueAtTime(gain, at + Math.min(0.03, dur * 0.2));
   g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
   o.connect(g);
-  out(g, wet);
+  out(g, wet, pan);
   o.start(at); o.stop(at + dur + 0.05);
 }
 
@@ -118,40 +130,49 @@ export function reloadSound() {
 }
 
 /** A bullet hitting a deer: the "whop" comes back after the bullet's flight + the sound's trip. */
-export function hitSound(delay: number, range: number) {
+export function hitSound(delay: number, range: number, az?: number) {
   if (!ctx) return;
-  const t = ctx.currentTime + delay;
+  const t = ctx.currentTime + delay, pan = panFor(az);
   const g = Math.max(0.08, Math.min(0.6, 60 / range));
-  burst(t, 0.16, g, "lowpass", 420, 0.6, 0.6, 14);
-  tone(t, 140, 70, 0.12, g * 0.7);
+  burst(t, 0.16, g, "lowpass", 420, 0.6, 0.6, 14, pan);
+  tone(t, 140, 70, 0.12, g * 0.7, "sine", 0, pan);
 }
 
-export function impactSound(delay: number, range: number) {
+export function impactSound(delay: number, range: number, az?: number) {
   if (!ctx) return;
   const g = Math.max(0.03, Math.min(0.3, 30 / range));
-  burst(ctx.currentTime + delay, 0.12, g, "lowpass", 900, 0.6, 0.4, 18);
+  burst(ctx.currentTime + delay, 0.12, g, "lowpass", 900, 0.6, 0.4, 18, panFor(az));
 }
 
 /** A whitetail's alarm "blow". */
-export function snortSound(delay: number, range: number) {
+export function snortSound(delay: number, range: number, az?: number) {
   if (!ctx) return;
   const g = Math.max(0.04, Math.min(0.5, 50 / range));
-  const t = ctx.currentTime + delay;
-  burst(t, 0.45, g, "bandpass", 1100, 1.2, 0.5, 5);
-  if (Math.random() < 0.6) burst(t + 0.9, 0.35, g * 0.8, "bandpass", 1000, 1.2, 0.5, 6);
+  const t = ctx.currentTime + delay, pan = panFor(az);
+  burst(t, 0.45, g, "bandpass", 1100, 1.2, 0.5, 5, pan);
+  if (Math.random() < 0.6) burst(t + 0.9, 0.35, g * 0.8, "bandpass", 1000, 1.2, 0.5, 6, pan);
 }
 
 /** A rutting buck's grunt: short, low, guttural. */
-export function gruntSound(delay: number, range: number) {
+export function gruntSound(delay: number, range: number, az?: number) {
   if (!ctx) return;
   const g = Math.max(0.02, Math.min(0.25, 25 / range));
-  const t = ctx.currentTime + delay;
+  const t = ctx.currentTime + delay, pan = panFor(az);
   const n = 1 + Math.floor(Math.random() * 3);
   for (let i = 0; i < n; i++) {
     const at = t + i * 0.55;
-    tone(at, 105, 82, 0.32, g, "sawtooth", 0.5);
-    burst(at, 0.3, g * 0.6, "lowpass", 320, 0.8, 0.5, 8);
+    tone(at, 105, 82, 0.32, g, "sawtooth", 0.5, pan);
+    burst(at, 0.3, g * 0.6, "lowpass", 320, 0.8, 0.5, 8, pan);
   }
+}
+
+/** A dry stick snapping under a hoof as a buck steps out of the bush. */
+export function twigSound(delay: number, range: number, az?: number) {
+  if (!ctx) return;
+  const g = Math.max(0.02, Math.min(0.3, 20 / range));
+  const t = ctx.currentTime + delay, pan = panFor(az);
+  burst(t, 0.035, g, "highpass", 1800, 0.7, 0.4, 60, pan);
+  burst(t + 0.012, 0.06, g * 0.5, "bandpass", 900, 2, 0.4, 40, pan);
 }
 
 // ---------- ambience ----------

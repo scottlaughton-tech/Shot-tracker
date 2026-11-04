@@ -8,7 +8,7 @@ import { nearestCover, type P2 } from "./routes";
 import { primDist, type Prim } from "./sdf";
 import { primaryZone, ZONES, type Gait, type Outcome, type Zone } from "../scoring";
 import { SPEED_OF_SOUND } from "../ballistics";
-import { gruntSound, snortSound } from "../engine/audio";
+import { gruntSound, snortSound, twigSound } from "../engine/audio";
 
 export type DeerState = "travel" | "feed" | "look" | "alert" | "flee" | "kick" | "wounded" | "dying" | "dead" | "gone";
 
@@ -95,7 +95,7 @@ export class Deer {
 
   private flee(tail: TailMode = "flag") {
     const dist = this.pos.distanceTo(this.world.eye);
-    if (!this.wounded && !this.lethal && this.state !== "flee" && dist < 220 && Math.random() < 0.6) snortSound(dist / SPEED_OF_SOUND + 0.2, dist);
+    if (!this.wounded && !this.lethal && this.state !== "flee" && dist < 220 && Math.random() < 0.6) snortSound(dist / SPEED_OF_SOUND + 0.2, dist, this.azimuth());
     const ax = this.pos.x - this.world.eye.x, az = this.pos.z - this.world.eye.z;
     const al = Math.hypot(ax, az) || 1;
     this.route = [{ x: this.pos.x, z: this.pos.z }, ...nearestCover(this.pos.x, this.pos.z, ax / al, az / al)];
@@ -120,7 +120,7 @@ export class Deer {
         if (this.gruntT <= 0) {
           this.gruntT = 12 + Math.random() * 25;
           const dist = this.pos.distanceTo(this.world.eye);
-          if (dist < 320 && this.travelSpeed < 5 && Math.random() < 0.6) gruntSound(dist / SPEED_OF_SOUND, dist);
+          if (dist < 320 && this.travelSpeed < 5 && Math.random() < 0.6) gruntSound(dist / SPEED_OF_SOUND, dist, this.azimuth());
         }
         if (this.nextStop <= 0 && this.wp > 2 && this.wp < this.route.length - 1) {
           const r = Math.random();
@@ -172,6 +172,11 @@ export class Deer {
         this.heading += Math.max(-rate * dt, Math.min(rate * dt, d));
         if (Math.hypot(dx, dz) < Math.max(3, this.speed * 0.6)) {
           this.wp++;
+          // stepping out of the cover: sometimes a stick snaps
+          if (this.wp === 2 && this.state === "travel") {
+            const dist = this.pos.distanceTo(this.world.eye);
+            if (dist < 260 && Math.random() < 0.55) twigSound(dist / SPEED_OF_SOUND, dist, this.azimuth());
+          }
           if (this.wp >= this.route.length) this.leave();
         }
       }
@@ -188,6 +193,9 @@ export class Deer {
     this.state = "gone";
     this.events.escaped(this, this.wounded);
   }
+
+  /** Direction of this buck from the stand (radians from north), for stereo sound. */
+  azimuth() { return Math.atan2(this.pos.x - this.world.eye.x, -(this.pos.z - this.world.eye.z)); }
 
   /** Head turn needed to look at the stand. */
   private lookToward(): number {
