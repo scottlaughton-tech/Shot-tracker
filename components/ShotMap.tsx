@@ -1,4 +1,5 @@
 "use client";
+import type { Trail } from "@/lib/store";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { createContext, Fragment, useContext, useEffect, useMemo, useRef, useState } from "react";
@@ -131,8 +132,10 @@ function DelBtn({ id, onDelete, label = "Delete" }: { id: string; onDelete?: (id
   );
 }
 
-export default function ShotMap({ shots, sightings, signs, blinds, me, focus, pickStart, onCenter, goto, ruler, onRulerAdd, aim, onDelete, liveBearing }: {
+export default function ShotMap({ shots, sightings, signs, blinds, me, focus, pickStart, onCenter, goto, ruler, onRulerAdd, aim, onDelete, liveBearing, trails }: {
   shots: ShotView[]; sightings: Sighting[]; signs: Sign[]; blinds: Blind[]; me: Me; focus: { key: string; n: number } | null;
+  /** imported GPX trails, drawn under everything else */
+  trails?: Trail[];
   /** set (even to null) while the crosshair is open */
   pickStart?: { lat: number; lon: number } | null;
   onCenter?: (lat: number, lon: number) => void;
@@ -177,6 +180,14 @@ export default function ShotMap({ shots, sightings, signs, blinds, me, focus, pi
           />
         </LayersControl.BaseLayer>
       </LayersControl>
+
+      {trails?.map((t) => (
+        <Fragment key={t.id}>
+          {/* dark edge so a yellow trail shows on the light topo map, then the trail colour */}
+          <Polyline positions={t.lines} interactive={false} pathOptions={{ color: "#3d2e00", weight: 6, opacity: 0.55, lineJoin: "round" }} />
+          <Polyline positions={t.lines} interactive={false} pathOptions={{ color: t.color, weight: 3, opacity: 0.95, lineJoin: "round" }} />
+        </Fragment>
+      ))}
 
       {pickStart !== undefined && onCenter && <PickMode start={pickStart} onCenter={onCenter} />}
       <GoTo goto={goto ?? null} />

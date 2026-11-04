@@ -10,6 +10,8 @@ import HelpSheet from "./HelpSheet";
 import { listenCompass, needsPermission, previouslyGranted, startCompass } from "@/lib/compass";
 import ReportForm, { type Picked, type PickKind, type ReportKind } from "./ReportForm";
 import ShotList, { type LayerKey, type Layers } from "./ShotList";
+import type { Trail } from "@/lib/store";
+import { parseGpx, simplify, trailLength } from "@/lib/gpx";
 
 const ShotMap = dynamic(() => import("./ShotMap"), {
   ssr: false,
@@ -25,7 +27,7 @@ export default function App() {
   const [reports, setReports] = useState<Report[]>([]);
   const [sightings, setSightings] = useState<Sighting[]>([]);
   // Which layers are on the map (remembered per phone).
-  const [layers, setLayers] = useState<Layers>({ shots: true, deer: true, sign: true, blinds: true });
+  const [layers, setLayers] = useState<Layers>({ shots: true, deer: true, sign: true, blinds: true, trails: true });
   useEffect(() => {
     try { const v = JSON.parse(localStorage.getItem("st:layers") ?? "null"); if (v) setLayers((l) => ({ ...l, ...v })); } catch {}
   }, []);
@@ -193,6 +195,53 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Trails (imported GPX): loaded once, not on every refresh
+  const [trails, setTrails] = useState<Trail[]>([]);
+  const loadTrails = useCallback(async () => {
+    try {
+      const res = await fetch("/api/trails", { cache: "no-store" });
+      if (res.ok) setTrails((await res.json()).trails ?? []);
+    } catch {}
+  }, []);
+  useEffect(() => { loadTrails(); }, [loadTrails]);
+
+  /** Read a GPX file on the phone, simplify it if it's very detailed, and save it for the party. */
+  async function importGpx(file: File): Promise<string> {
+    const text = await file.text().catch(() => "");
+    const found = parseGpx(text, file.name.replace(/\.[^.]+$/, ""));
+    if (!found.length) return "No trails found in that file. It needs to be a GPX file with tracks or routes.";
+    let name = "";
+    try { name = localStorage.getItem("st:name") ?? ""; } catch {}
+    if (!name) name = (window.prompt("Your first name (shown as who added the trails):") ?? "").trim();
+    if (!name) return "Enter your first name to add trails.";
+    let added = 0;
+    for (const t of found) {
+      let lines = t.lines;
+      const count = () => lines.reduce((s, l) => s + l.length, 0);
+      for (const tol of [1, 2, 4, 8, 15]) { if (count() <= 20000) break; lines = t.lines.map((l) => simplify(l, tol)); }
+      const res = await fetch("/api/trails", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: t.name, color: t.color, lines, addedBy: name }),
+      }).catch(() => null);
+      if (!res || !res.ok) return res ? (await res.json().catch(() => ({}))).error ?? "Couldn't save the trails." : "No connection. Try again when you have signal.";
+      added++;
+    }
+    await loadTrails();
+    setLayer("trails", true);
+    const km = found.reduce((s, t) => s + trailLength(t.lines), 0) / 1000;
+    return `✓ Added ${added} ${added === 1 ? "trail" : "trails"} (${km.toFixed(1)} km).`;
+  }
+  async function removeTrail(id: string) {
+    if (!window.confirm("Delete this trail for everyone in the party?")) return;
+    await fetch(`/api/trails/${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => null);
+    loadTrails();
+  }
+  function focusTrail(t: Trail) {
+    const pts = t.lines.flat();
+    const lat = pts.reduce((s, p) => s + p[0], 0) / pts.length, lon = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+    setGoto((g) => ({ lat, lon, n: (g?.n ?? 0) + 1, zoom: 13 }));
+  }
+
   const load = useCallback(async () => {
     try {
       const res = await fetch("/api/reports", { cache: "no-store" });
@@ -355,6 +404,7 @@ export default function App() {
         <div className="map-wrap">
           {!picking && !ruler && !quick && <button className="blind-fab" onClick={() => openForm("blind")}>🟧 Add blind</button>}
           <ShotMap shots={mapShots} sightings={mapDeer} signs={mapSigns} blinds={mapBlinds} me={me} focus={focus}
+            trails={layers.trails ? trails : []}
             pickStart={pickMode === "heading" ? aimFrom
               : picking ? (picked ?? (me ? { lat: me.lat, lon: me.lon } : null)) : undefined}
             onDelete={remove}
@@ -459,6 +509,10 @@ export default function App() {
             blinds={sortedBlinds}
             onAddBlind={() => { setPanelOpen(false); openForm("blind"); }}
             onClearBlinds={clearBlinds}
+            trails={trails}
+            onImportTrails={importGpx}
+            onDeleteTrail={removeTrail}
+            onFocusTrail={(t) => { focusTrail(t); setPanelOpen(false); }}
           />
         </aside>
       </div>

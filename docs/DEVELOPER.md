@@ -48,6 +48,8 @@ app/
   api/signs/route.ts           POST deer sign · DELETE = clear all sign
   api/blinds/route.ts          POST blind · DELETE = clear all blinds
   api/settings/route.ts        PUT {intervalMin} (shared "Group" setting)
+  api/trails/route.ts          GET all imported trails · POST one (parsed from GPX in the browser)
+  api/trails/[id]/route.ts     DELETE one trail
   game/page.tsx                Last Light, the hunting game (opened from the 🦌 in the top bar) – see docs/GAME.md
   api/game/scores/route.ts     game leaderboard: GET top 20 · POST a finished hunt
 game/                          everything for the game (three.js engine, world, deer) – see docs/GAME.md
@@ -63,7 +65,8 @@ components/
 lib/
   geo.ts           types (Report, Sighting, Sign, Blind), distance/bearing math, grouping, triangulation
   geo.test.ts      unit tests for the math (node --test)
-  store.ts         Redis/in-memory storage
+  store.ts         Redis/in-memory storage (reports, trails, game scores)
+  gpx.ts           GPX → trails (tracks and routes), simplification, length
   auth.ts          passcode cookie
   compass.ts       shared phone compass (permission, smoothing, useHeading hook)
   declination.ts   magnetic declination (WMM)
@@ -99,6 +102,12 @@ shot/sighting times within the **last 48 h**).
 - `clearKind("shots" | "sightings" | "signs" | "blinds")` deletes only that kind (`HDEL`).
 - Without Redis env vars an in-memory `Map` on `globalThis` is used (lost on restart; the UI shows a
   "No database connected" banner).
+- **Trails** (imported GPX) live in their own hash `shot-tracker:trails` (id → `{id, name, color,
+  lines: [[lat,lon]…][], addedBy, at}`), loaded once when the map opens, not on the 10 s refresh.
+  The GPX is parsed in the browser (`lib/gpx.ts`, tested in `lib/gpx.test.ts`) and very detailed
+  files are simplified (Douglas–Peucker) to ≤ 20k points before upload. They're deliberately kept out
+  of the repository because the GitHub repo is public. The game leaderboard is a sorted set
+  `shot-tracker:game-scores` (see docs/GAME.md).
 
 ## API summary
 

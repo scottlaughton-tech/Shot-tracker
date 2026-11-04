@@ -7,8 +7,10 @@ import { bearingTo, compassPoint, distance, formatDistance, type Blind, type Sig
 import { BLIND_COLOR, BLIND_STYLE, DEER_STYLE, SIGN_COLOR, SIGN_STYLE } from "@/lib/colors";
 import { ago, when } from "@/lib/time";
 import type { Me, ShotView } from "./App";
+import type { Trail } from "@/lib/store";
+import { trailLength } from "@/lib/gpx";
 
-export type LayerKey = "shots" | "deer" | "sign" | "blinds";
+export type LayerKey = "shots" | "deer" | "sign" | "blinds" | "trails";
 export type Layers = Record<LayerKey, boolean>;
 
 const LAYERS: { key: LayerKey; icon: string; label: string; color: string }[] = [
@@ -16,6 +18,7 @@ const LAYERS: { key: LayerKey; icon: string; label: string; color: string }[] = 
   { key: "deer", icon: "🦌", label: "Deer", color: "#6b3e1f" },
   { key: "sign", icon: "🍂", label: "Sign", color: SIGN_COLOR },
   { key: "blinds", icon: "🟧", label: "Blinds", color: BLIND_COLOR },
+  { key: "trails", icon: "🥾", label: "Trails", color: "#b08900" },
 ];
 
 const fmtTime = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
@@ -49,6 +52,11 @@ type Props = {
   blinds: Blind[];
   onAddBlind: () => void;
   onClearBlinds: () => void;
+  // trails (imported GPX)
+  trails: Trail[];
+  onImportTrails: (file: File) => Promise<string>;
+  onDeleteTrail: (id: string) => void;
+  onFocusTrail: (t: Trail) => void;
 };
 
 function useStored<T extends string>(key: string, initial: T, allowed: readonly T[]) {
@@ -65,12 +73,14 @@ function useStored<T extends string>(key: string, initial: T, allowed: readonly 
 }
 
 export default function ShotList(p: Props) {
-  const [tab, setTab] = useStored<LayerKey>("st:tab", "shots", ["shots", "deer", "sign", "blinds"]);
+  const [tab, setTab] = useStored<LayerKey>("st:tab", "shots", ["shots", "deer", "sign", "blinds", "trails"]);
+  const [importMsg, setImportMsg] = useState("");
+  const [importing, setImporting] = useState(false);
   const [edit, setEdit] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
 
   const counts: Record<LayerKey, number> = {
-    shots: p.shots.length, deer: p.sightings.length, sign: p.signs.length, blinds: p.blinds.length,
+    shots: p.shots.length, deer: p.sightings.length, sign: p.signs.length, blinds: p.blinds.length, trails: p.trails.length,
   };
   const away = (lat: number, lon: number) =>
     p.me ? `${formatDistance(distance(p.me.lat, p.me.lon, lat, lon))} ${compassPoint(bearingTo(p.me.lat, p.me.lon, lat, lon))}` : null;
@@ -227,6 +237,33 @@ export default function ShotList(p: Props) {
                 note={x.note} />
             ))}
             {edit && p.blinds.length > 0 && <Danger label="Clear all blinds" onClick={p.onClearBlinds} />}
+          </>
+        )}
+
+        {tab === "trails" && (
+          <>
+            <label className={`btn add-blind add-trail ${importing ? "busy" : ""}`}>
+              {importing ? "Adding…" : "＋ Add trails from a GPX file"}
+              {/* no "accept" filter: iPhone greys out .gpx files when one is set */}
+              <input type="file" hidden disabled={importing} onChange={async (e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (!f) return;
+                setImporting(true); setImportMsg("");
+                setImportMsg(await p.onImportTrails(f));
+                setImporting(false);
+              }} />
+            </label>
+            {importMsg && <p className={importMsg.startsWith("✓") ? "saved-note" : "error"}>{importMsg}</p>}
+            <p className="muted small-note">Export a GPX file from your mapping app (Topo Maps, Gaia, onX, Garmin…), then pick it here.
+              Everyone in the party will see the trails. They&apos;re kept in the party&apos;s database, not in the app&apos;s code.</p>
+            {p.trails.length === 0 && <p className="muted empty">No trails added yet.</p>}
+            {p.trails.map((t) => (
+              <Row key={t.id} badge="〰" color={t.color} edit={edit}
+                onOpen={() => p.onFocusTrail(t)} onDelete={() => p.onDeleteTrail(t.id)}
+                title={t.name}
+                sub={`${(trailLength(t.lines) / 1000).toFixed(1)} km · added by ${t.addedBy}`} />
+            ))}
           </>
         )}
       </div>

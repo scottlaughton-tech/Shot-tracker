@@ -86,7 +86,9 @@ export default function HelpSheet({ onClose }: { onClose: () => void }) {
             <li><b>📍</b> brings the map back to you.</li>
             <li><b>📏 Ruler</b>: tap it, then tap two or more spots (or blinds) to measure the distance. Tap <b>Done</b> when finished.</li>
             <li>The <b>stack-of-paper</b> button (top right) switches to a satellite photo and back.</li>
-            <li><b>☰ Layers</b> (top right): tap the big colored buttons to hide or show shots, deer, sign or blinds.
+            <li><b>Yellow lines</b> are the party&apos;s trails. To add trails: <b>☰ Layers</b> → <b>Trails</b> → <b>Add trails from a GPX file</b>,
+              then pick the file (export it from your mapping app first). Everyone sees them.</li>
+            <li><b>☰ Layers</b> (top right): tap the big colored buttons to hide or show shots, deer, sign, blinds or trails.
               Below that is a list. Tap any line in the list to jump to it on the map.</li>
             <li><b>🔕 / 🔔</b> turns on a beep when someone else reports something. It&apos;s off by default so it won&apos;t spook deer.</li>
           </ul>

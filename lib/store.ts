@@ -96,3 +96,27 @@ export async function addScore(s: GameScore): Promise<void> {
   await redis.zadd(SCORES, { score: s.score, member: JSON.stringify(s) });
   await redis.zremrangebyrank(SCORES, 0, -KEEP - 1); // keep the best KEEP
 }
+
+// ---------- Trails (imported GPX) ----------
+// Their own hash, loaded once when the map opens (not on every 10-second refresh).
+const TRAILS = "shot-tracker:trails";
+
+export type Trail = { id: string; name: string; color: string; lines: [number, number][][]; addedBy: string; at: number };
+const tMem = globalThis as unknown as { __shotTrails?: Map<string, Trail> };
+const trailMem: Map<string, Trail> = (tMem.__shotTrails ??= new Map());
+
+export async function loadTrails(): Promise<Trail[]> {
+  if (!redis) return [...trailMem.values()];
+  const all = (await redis.hgetall<Record<string, unknown>>(TRAILS)) ?? {};
+  return Object.values(all).map((v) => (typeof v === "string" ? JSON.parse(v) : v) as Trail);
+}
+
+export async function addTrail(t: Trail): Promise<void> {
+  if (!redis) return void trailMem.set(t.id, t);
+  await redis.hset(TRAILS, { [t.id]: JSON.stringify(t) });
+}
+
+export async function deleteTrail(id: string): Promise<void> {
+  if (!redis) return void trailMem.delete(id);
+  await redis.hdel(TRAILS, id);
+}

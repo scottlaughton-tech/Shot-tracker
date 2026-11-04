@@ -66,6 +66,9 @@ Until steps 2–4 are done, the site shows a warning (no passcode, or reports ar
   - Below: tabs show one detailed list at a time. Tap a row to zoom to it. On the Shots tab, tap the
     colored dot to show or hide one shot's lines, or ▾ to see who reported it.
   - Deleting is locked until you tap **Edit**. Then 🗑 buttons and **Clear all** appear.
+- **🥾 Trails:** in ☰ Layers → **Trails**, tap **Add trails from a GPX file** and pick a GPX exported from
+  your mapping app (Topo Maps, Gaia, onX, Garmin…). The trails are drawn on the map for the whole party
+  and kept in the database (not in the code, which is public on GitHub). Edit → 🗑 removes one.
 - **Group** (top bar): how many minutes apart reports can be and still count as one shot.
   This setting is shared with the whole party.
 
