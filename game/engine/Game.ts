@@ -19,16 +19,15 @@ import { buildFence } from "../world/fence";
 import { dropTable, LOAD_308, stepBullet, zeroAngle, type BulletState } from "../ballistics";
 import { buildDeerAsset, type DeerAsset } from "../deer/model";
 import type { Deer } from "../deer/Deer";
-import { Hunt, type Banner, type HuntSummary } from "./Hunt";
+import { Hunt, type Banner, type HuntStatus, type HuntSummary } from "./Hunt";
 import { boltSound, hitSound, impactSound, reloadSound, setListenerYaw, shotSound } from "./audio";
 
 export const WIDE_HFOV = 70; // degrees across the screen in the open view
 export const ZOOMS = [4, 6, 8, 12, 16];
 const FOV_AT_1X = 19.2; // a 4–16× hunting scope shows about 4.8° at 4×
-const AIM_SENSITIVITY = 0.65; // dragging across the whole scope moves the aim ~2/3 of a scope width
-const REGRIP_MS = 350;        // lift and re-touch this fast and the scope stays where it was
+const AIM_SENSITIVITY = 0.65; // a slow drag across the whole scope moves the aim ~2/3 of a scope width
 const MAG_SIZE = 5;
-export const ROUNDS_PER_HUNT = 10;
+// ammunition is unlimited (the hunt ends on three strikes); the magazine still holds 5
 const BOLT_TIME = 1.25;
 const RELOAD_TIME = 3.2;
 
@@ -53,6 +52,7 @@ export type GameEvents = {
   banner: (b: Banner) => void;
   score: (s: number) => void;
   end: (s: HuntSummary) => void;
+  status: (s: HuntStatus) => void;
 };
 
 /** A bullet in flight; `aimed` is the buck it was fired at (for "missed high/low" feedback). */
@@ -92,7 +92,7 @@ export class Game {
   private recoil = { pitch: 0, yaw: 0, vp: 0, vy: 0, shake: 0 };
 
   // rifle
-  rounds = ROUNDS_PER_HUNT;
+  rounds = Infinity;
   mag = MAG_SIZE;
   chamber: Chamber = "ready";
   private chamberTimer = 0;
@@ -201,7 +201,8 @@ export class Game {
     this.wideCam.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(hf / 2) / this.wideCam.aspect));
     this.wideCam.rotation.set(THREE.MathUtils.degToRad(-2.5), 0, 0);
     this.wideCam.updateProjectionMatrix();
-    this.scopeD = Math.min(h * 0.94, w * 0.58);
+    this.scopeD = Math.min(h - 62, w * 0.5); // leaves room for the top bar
+    if (this.scoped) this.placeScope();
   }
 
   start() {
@@ -223,43 +224,110 @@ export class Game {
 
   // ---------- aiming ----------
 
-  private closeTimer = 0;
+  /** dimmed still of the open view, shown around the scope so you can see where it's pointed */
+  private snapRT: THREE.WebGLRenderTarget | null = null;
+  private snapScene: THREE.Scene | null = null;
+  private snapMat: THREE.ShaderMaterial | null = null;
+  private snapCam = (() => { const c = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1); c.position.z = 0.5; return c; })();
+  private lastMove = 0;
 
-  /** finger down at a screen point: open the scope looking there (or keep it, if this is a quick re-grip) */
-  beginAim(clientX: number, clientY: number) {
-    if (this.closeTimer) {
-      window.clearTimeout(this.closeTimer);
-      this.closeTimer = 0;
-      if (this.scoped) return; // re-grip: keep aiming from where we were
-    }
+  private dirAt(clientX: number, clientY: number) {
     const rect = this.canvas.getBoundingClientRect();
     const x = clientX - rect.left, y = clientY - rect.top;
-    const v = new THREE.Vector3((x / this.w) * 2 - 1, -(y / this.h) * 2 + 1, 0.5).unproject(this.wideCam).sub(this.wideCam.position).normalize();
+    return new THREE.Vector3((x / this.w) * 2 - 1, -(y / this.h) * 2 + 1, 0.5).unproject(this.wideCam).sub(this.wideCam.position).normalize();
+  }
+
+  private aimAt(clientX: number, clientY: number) {
+    const v = this.dirAt(clientX, clientY);
     this.aimYaw = Math.atan2(v.x, -v.z);
     this.aimPitch = Math.asin(v.y);
     this.clampAim();
-    // put the scope on the side away from the finger so the finger doesn't cover it
-    this.scopeCx = x < this.w * 0.5 ? this.w * 0.57 : this.w * 0.43;
-    this.scopeCx = Math.min(Math.max(this.scopeCx, this.scopeD / 2 + 4), this.w - this.scopeD / 2 - 4);
-    this.scopeCy = this.h / 2;
+  }
+
+  /** Tap on the field: the scope comes up right there, over the spot, and stays up. */
+  openScope(clientX: number, clientY: number) {
+    if (!this.scoped) this.takeSnapshot();
+    this.aimAt(clientX, clientY);
     this.scoped = true;
+    this.placeScope();
     this.pushHud();
   }
 
-  moveAim(dx: number, dy: number) {
+  /** While the scope is up, a tap somewhere else on the field moves it there. */
+  jumpScope(clientX: number, clientY: number) {
+    if (!this.scoped) return this.openScope(clientX, clientY);
+    this.aimAt(clientX, clientY);
+    this.placeScope();
+  }
+
+  /** Is this screen point inside the scope circle? */
+  insideScope(clientX: number, clientY: number) {
+    const rect = this.canvas.getBoundingClientRect();
+    return Math.hypot(clientX - rect.left - this.scopeCx, clientY - rect.top - this.scopeCy) < this.scopeD / 2;
+  }
+
+  /** Slide to aim (relative, like a trackpad; quick swipes go farther). */
+  moveAim(dx: number, dy: number, t = performance.now()) {
     if (!this.scoped) return;
-    const perPx = (THREE.MathUtils.degToRad(this.scopeFov()) / this.scopeD) * AIM_SENSITIVITY;
+    const dtm = Math.max(1, t - this.lastMove);
+    this.lastMove = t;
+    const speed = Math.hypot(dx, dy) / dtm * 1000; // px/s
+    const accel = 1 + Math.min(2.5, Math.max(0, speed - 250) / 700);
+    const perPx = (THREE.MathUtils.degToRad(this.scopeFov()) / this.scopeD) * AIM_SENSITIVITY * accel;
     this.aimYaw += dx * perPx;
     this.aimPitch -= dy * perPx;
     this.clampAim();
+    this.placeScope();
   }
 
-  /** finger lifted: lower the rifle after a moment (so a quick re-grip keeps the scope up) */
-  endAim(immediate = false) {
-    if (this.closeTimer) window.clearTimeout(this.closeTimer);
-    this.closeTimer = 0;
-    if (immediate) { this.scoped = false; this.pushHud(); return; }
-    this.closeTimer = window.setTimeout(() => { this.closeTimer = 0; this.scoped = false; this.pushHud(); }, REGRIP_MS);
+  /** Lower the rifle. */
+  closeScope() {
+    this.scoped = false;
+    this.pushHud();
+  }
+  /** (old name, kept for the pause/hidden/end paths) */
+  endAim(_immediate = true) { this.closeScope(); }
+
+  /** The circle sits over the part of the view it's looking at (kept on screen, clear of the buttons). */
+  private placeScope() {
+    const dir = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(this.aimPitch, -this.aimYaw, 0, "YXZ"));
+    const v = this.eye.clone().add(dir).project(this.wideCam);
+    const x = ((v.x + 1) / 2) * this.w, y = ((1 - v.y) / 2) * this.h;
+    const r = this.scopeD / 2;
+    this.scopeCx = Math.min(Math.max(x, r + 6), this.w - r - 118);
+    this.scopeCy = Math.min(Math.max(y, r + 56), this.h - r - 4);
+  }
+
+  private takeSnapshot() {
+    const w = Math.max(2, Math.round(this.w * this.dpr * 0.5)), h = Math.max(2, Math.round(this.h * this.dpr * 0.5));
+    if (!this.snapRT || this.snapRT.width !== w || this.snapRT.height !== h) {
+      this.snapRT?.dispose();
+      this.snapRT = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType });
+      // drawn AFTER the scope, with a round hole where the scope is (so the scope is a clean circle)
+      this.snapMat = new THREE.ShaderMaterial({
+        uniforms: { map: { value: this.snapRT.texture }, uCenter: { value: new THREE.Vector2() }, uRadius: { value: 100 }, uDim: { value: 0.34 } },
+        vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
+        fragmentShader: `uniform sampler2D map; uniform vec2 uCenter; uniform float uRadius; uniform float uDim; varying vec2 vUv;
+void main() {
+  if (distance(gl_FragCoord.xy, uCenter) < uRadius) discard;
+  vec3 c = texture2D(map, vUv).rgb;
+  c = mix(vec3(dot(c, vec3(0.3, 0.59, 0.11))), c, 0.6) * uDim;
+  gl_FragColor = vec4(c, 1.0);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}`,
+        depthTest: false, depthWrite: false,
+      });
+      const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.snapMat);
+      quad.frustumCulled = false;
+      this.snapScene = new THREE.Scene();
+      this.snapScene.add(quad);
+    }
+    const rd = this.renderer;
+    rd.setRenderTarget(this.snapRT);
+    rd.clear();
+    rd.render(this.scene, this.wideCam);
+    rd.setRenderTarget(null);
   }
 
   setZoom(z: number) {
@@ -394,24 +462,22 @@ export class Game {
 
   startHunt() {
     this.hunt?.dispose();
-    this.rounds = ROUNDS_PER_HUNT;
+    this.rounds = Infinity;
     this.mag = MAG_SIZE;
     this.chamber = "ready";
     this.bullets = [];
     this.endedSent = false;
     this.paused = false;
-    this.huntTime = 0;
+    this.duskNow = 0;
     this.sky.setLight(0);
     if (this.env) { this.sky.hemi.intensity *= 0.45; this.env.update(0); }
     this.hunt = new Hunt({
       scene: this.scene,
       heightAt: this.terrain.heightAt,
       eye: this.eye,
-      roundsLeft: () => this.rounds,
       bulletsInFlight: () => this.bullets.length,
       setTargets: (t) => { this.targets = t; },
-      dusk: () => this.huntTime / Game.HUNT_LENGTH,
-    }, this.deerAsset, this.events.banner, this.events.score);
+    }, this.deerAsset, this.events.banner, this.events.score, this.events.status);
     this.events.score(0);
     this.pushHud();
   }
@@ -419,8 +485,8 @@ export class Game {
   private env: { update: (dusk: number) => void } | null = null;
   /** paused: the world keeps drawing but nothing moves (menu open, app in background) */
   paused = false;
-  private huntTime = 0;
-  static HUNT_LENGTH = 330; // seconds of "last light"
+  /** how far the sun has gone down (follows the hunt's level, eased) */
+  private duskNow = 0;
 
   // ---------- frame ----------
 
@@ -440,10 +506,11 @@ export class Game {
 
   /** Testing only: look through the scope in a given direction (degrees). */
   debugView(yawDeg: number, pitchDeg: number, zoom: number) {
+    if (!this.scoped) this.takeSnapshot();
     this.scoped = true;
-    this.scopeCx = this.w / 2; this.scopeCy = this.h / 2;
     this.aimYaw = THREE.MathUtils.degToRad(yawDeg);
     this.aimPitch = THREE.MathUtils.degToRad(pitchDeg);
+    this.placeScope();
     this.setZoom(zoom);
   }
 
@@ -493,11 +560,12 @@ export class Game {
     setListenerYaw(this.scoped ? this.aimYaw : 0);
     this.updateBullets(dt);
     if (this.hunt) {
-      this.huntTime += dt;
-      if (this.frames % 30 === 0) {
-        const dusk = Math.min(1, this.huntTime / Game.HUNT_LENGTH);
-        this.sky.setLight(dusk);
-        if (this.env) { this.sky.hemi.intensity *= 0.45; this.env.update(dusk); }
+      // the sun goes down as you climb the levels (eased over ~10 s after each level-up)
+      const want = this.hunt.dusk;
+      if (Math.abs(want - this.duskNow) > 0.001 && this.frames % 15 === 0) {
+        this.duskNow += Math.sign(want - this.duskNow) * Math.min(Math.abs(want - this.duskNow), 0.005);
+        this.sky.setLight(this.duskNow);
+        if (this.env) { this.sky.hemi.intensity *= 0.45; this.env.update(this.duskNow); }
       }
       this.hunt.update(dt);
       if (this.hunt.over && !this.endedSent) { this.endedSent = true; this.endAim(true); this.events.end(this.hunt.summary()); }
@@ -615,12 +683,20 @@ export class Game {
     const d = this.scopeD, x0 = this.scopeCx - d / 2, y0 = this.scopeCy - d / 2;
     rd.setScissorTest(false);
     rd.setClearColor(0x000000, 1);
+    rd.setViewport(0, 0, this.w, this.h);
     rd.clear();
     rd.setScissorTest(true);
     rd.setViewport(x0, this.h - y0 - d, d, d);
     rd.setScissor(x0, this.h - y0 - d, d, d);
     rd.render(this.scene, this.scopeCam);
     rd.setScissorTest(false);
+    if (this.snapScene && this.snapMat) {
+      const pr = rd.getPixelRatio();
+      this.snapMat.uniforms.uCenter.value.set(this.scopeCx * pr, (this.h - this.scopeCy) * pr);
+      this.snapMat.uniforms.uRadius.value = (d / 2 - 1) * pr;
+      rd.setViewport(0, 0, this.w, this.h);
+      rd.render(this.snapScene, this.snapCam);
+    }
     const pxPerMil = d / (THREE.MathUtils.degToRad(this.scopeFov()) * 1000);
     const s = this.recoil.shake;
     drawScope(ctx, {

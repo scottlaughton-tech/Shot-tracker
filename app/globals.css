@@ -528,3 +528,13 @@ p { margin: 0; }
 .g-buck-body { display: flex; gap: 12px; align-items: center; margin-top: 4px; }
 .g-diagram { width: 140px; flex: 0 0 140px; height: auto; background: rgba(0,0,0,0.25); border-radius: 8px; }
 .g-parts { flex: 1; }
+.g-level {
+  display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.45); padding: 6px 12px;
+  border-radius: 20px; font-weight: 800; font-size: 15px;
+}
+.g-strikes { display: flex; gap: 2px; font-size: 14px; }
+.g-strikes span { color: rgba(255,255,255,0.3); }
+.g-strikes span.on { color: #ff6b6b; }
+.g-buck.escaped { border-color: #adb5bd; }
+.g-lower { font-size: 22px; background: rgba(120,20,20,0.6); margin-bottom: 4px; }
+.g-help ol { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; line-height: 1.4; }

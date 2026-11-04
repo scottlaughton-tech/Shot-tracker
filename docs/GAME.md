@@ -10,19 +10,29 @@ load time: there are no 3D model or audio files. The only image files are CC0 ph
 
 - The player sits in a ladder stand (eye 4.2 m above the ground) on the south edge of an old
   field near Bancroft. The field runs ~1 km north, rising gently away from the stand.
-- **Touch and hold** anywhere (not on a button) → scope opens aimed where you touched. **Slide** to
-  aim (relative, like a trackpad; sensitivity scales with magnification). **Lift** to lower the rifle.
+- **Tap** anywhere (not on a button) → the scope opens there, centred over the spot, and **stays up**.
+  **Slide** to aim (relative, like a trackpad; sensitivity scales with magnification, quick swipes are
+  accelerated). A quick **tap outside the circle** moves the scope there; **✕** (or Escape) lowers it.
+  Around the scope the open view is shown as a dimmed, greyed still taken when the scope came up
+  (re-rendering it live would cost a second full render, and the tree/grass detail is set up for
+  the scope view by then). The circle sits over the spot it's looking at, kept clear of the buttons.
 - **FIRE** (right thumb), **+ / −** magnification 4–16×. Desktop: hold the mouse, Space/F fires, +/− zoom.
-- 10 rounds per hunt: 5 in the rifle, then a 3.2 s reload. 1.25 s bolt cycle between shots.
-- **Last light:** a hunt lasts about 5½ minutes of game time (`Game.HUNT_LENGTH`). The sun sinks and
-  the light warms and dims; at the end it's too dark to shoot.
-- Up to 12 bucks come out, a new one every ~25 s, at most three in view. The hunt ends when the rifle
-  is empty and every hit buck is accounted for, or at last light.
+- Unlimited ammunition: 5 in the rifle, then a 3.2 s reload. 1.25 s bolt cycle between shots.
+- **Levels** (`LEVELS` in `game/engine/Hunt.ts`): one buck at a time. Level 1 stands broadside at
+  70–130 m; each buck you drop moves you up (farther, walking → trotting → some running, shorter
+  stands). Bucks walk (or trot) in from cover to a spot inside the level's range band
+  (`makeRoute` returns that spot as `poseAt`) and easy ones stand broadside there.
+- **Strikes:** a buck that was in the field when you fired and then gets away (missed or wounded) is a
+  strike; three ends the hunt. A buck you never shot at doesn't count, and another one comes.
+- **⛶ Full screen:** Fullscreen API + landscape lock where allowed (Android, desktop). iPhone Safari
+  has no element full screen, so the button explains Add to Home Screen; `/game` carries
+  apple-mobile-web-app-capable so the home-screen copy opens without Safari's bars (and the login page
+  sends you back to `/game` via `?next=`).
+- **Last light:** the sun sinks with the level (`Hunt.dusk`, eased in `Game`), so the long shots of the
+  later levels are in warmer, dimmer light.
 - No range help: the reticle has a deer ranging scale. Misses say how far off the shot was and how
   far away the buck really was ("40 cm low – he was 310 m away").
 - Wounded bucks run for cover. If they reach it: −75 points.
-- **Re-grip:** lift the aiming finger and touch again within 350 ms and the scope stays up where it
-  was (lets you keep tracking a moving buck).
 - Sounds are stereo-panned by direction: grunts from cruising bucks, a stick snapping when one steps
   out of the bush, alarm snorts, hit "whops". The pause button (and leaving the app) pauses the hunt.
 - The results screen shows each buck hit with a side-view diagram of the vitals and the bullet holes.
@@ -117,13 +127,13 @@ public/game/tex/           photo textures (see CREDITS.txt) and atlas.webp
 |---|---|
 | Points per zone, bonuses, wound penalty | `game/scoring.ts` (`ZONES`, `SCORE`) |
 | Rounds, magazine, bolt/reload time, zoom steps, aim sensitivity | top of `game/engine/Game.ts` |
-| Bucks per hunt, spawn timing | `game/engine/Hunt.ts` |
+| Levels (ranges, speeds, stands, running chance), strikes, spawn timing | `LEVELS`, `STRIKES` in `game/engine/Hunt.ts` |
 | Buck speeds, stops, reactions, how far a hit buck runs | `game/deer/Deer.ts` |
-| Range mix of where bucks appear | `pickRange` in `game/deer/routes.ts` |
+| Where bucks come from / walk to | `makeRoute` in `game/deer/routes.ts`, cover clumps in `ISLANDS` (`layout.ts`) |
 | Field shape, islands, hedgerow | `game/world/layout.ts` |
 | Tree species mix | `chooseSpecies` in `game/world/forest.ts` |
 | Rifle/load | `LOAD_308` in `game/ballistics.ts` (reticle follows automatically) |
-| Length of the hunt (sunset) | `Game.HUNT_LENGTH` in `game/engine/Game.ts`, colours in `setLight` (`world/sky.ts`) |
+| Sunset per level | `Hunt.dusk` (level 10 = nearly down), colours in `setLight` (`world/sky.ts`) |
 | Far meadow grass height | `MEADOW_HEIGHT` in `game/world/layout.ts` |
 | Tone mapping / sky light strength | `Game` constructor and `init` (`?tm=aces|agx|neutral`, `?env=0.07`, `?noenv` to compare) |
 

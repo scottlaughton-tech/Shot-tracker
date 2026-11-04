@@ -96,8 +96,9 @@ export default function HelpSheet({ onClose }: { onClose: () => void }) {
           <h3>🦌 The hunting game (Last Light)</h3>
           <ul>
             <li>Tap the <b>🦌</b> at the top left to open the game. Turn your phone <b>sideways</b>.</li>
-            <li><b>Touch and hold</b> the screen to look through the scope. <b>Slide</b> your finger to aim. Press the red <b>FIRE</b> button with your other thumb.</li>
-            <li>You get <b>10 rounds</b>. Better hits, longer shots, moving bucks and bigger racks score more. Wounded bucks that get away cost points.</li>
+            <li><b>Tap</b> where you want to look: the scope comes up there and stays up. <b>Slide</b> your finger to aim, then press the red <b>FIRE</b> button with your other thumb. The red <b>✕</b> lowers the rifle.</li>
+            <li>The first buck is close and easy. Every buck you drop takes you up a <b>level</b>: farther out and moving faster. If <b>3 bucks</b> you shot at get away, the hunt is over.</li>
+            <li><b>⛶</b> makes it full screen. On iPhone, add the game to your home screen for full screen.</li>
             <li>The <b>How to play</b> button in the game explains the scope marks. Scores go on the party leaderboard.</li>
           </ul>
         </section>

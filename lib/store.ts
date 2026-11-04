@@ -81,7 +81,7 @@ export async function setInterval(min: number): Promise<void> {
 const SCORES = "shot-tracker:game-scores";
 const KEEP = 200;
 
-export type GameScore = { id: string; name: string; score: number; kills: number; shots: number; best: string | null; at: number };
+export type GameScore = { id: string; name: string; score: number; kills: number; shots: number; level?: number; best: string | null; at: number };
 const gMem = globalThis as unknown as { __shotScores?: GameScore[] };
 const scoreMem: GameScore[] = (gMem.__shotScores ??= []);
 

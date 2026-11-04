@@ -20,11 +20,12 @@ export async function POST(req: Request) {
   const kills = Math.round(Number(b.kills));
   const shots = Math.round(Number(b.shots));
   const best = b.best == null ? null : String(b.best).slice(0, 80);
+  const level = Math.round(Number(b.level ?? 1));
   if (!name) return NextResponse.json({ error: "First name is required" }, { status: 400 });
-  if (!isFinite(score) || score < -2000 || score > 20000 || !(kills >= 0 && kills <= 12) || !(shots >= 0 && shots <= 10)) {
+  if (!isFinite(score) || score < -5000 || score > 200000 || !(kills >= 0 && kills <= 300) || !(shots >= 0 && shots <= 3000) || !(level >= 1 && level <= 301)) {
     return NextResponse.json({ error: "That score doesn't look right" }, { status: 400 });
   }
-  const entry: GameScore = { id: randomUUID(), name, score, kills, shots, best, at: Date.now() };
+  const entry: GameScore = { id: randomUUID(), name, score, kills, shots, level, best, at: Date.now() };
   await addScore(entry);
   const scores = await topScores(20);
   return NextResponse.json({ entry, scores, rank: scores.findIndex((s) => s.id === entry.id) + 1 || null });

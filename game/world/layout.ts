@@ -22,6 +22,8 @@ const FIELD: [number, number][] = [
 /** Tree islands inside the field: [x, z, radius] */
 export const ISLANDS: [number, number, number][] = [
   [-175, -335, 34], [235, -565, 48], [72, -142, 11], [-70, -705, 24], [330, -330, 20],
+  // small brush clumps closer in, where the first bucks of a hunt come from
+  [-68, -118, 9], [118, -196, 12],
 ];
 
 /** Hedgerow along an old rail fence: polyline [x, z], with a gap the deer use. */

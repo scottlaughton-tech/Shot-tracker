@@ -87,12 +87,18 @@ two people standing close together.
 
 Tap the **🦌** at the top left of the map. Hold the phone sideways.
 
-- **Touch and hold** to bring up the scope, **slide** to aim, press **FIRE** with the other thumb.
-  **+ / −** change the magnification (4–16×).
+- **Tap** where you want to look: the scope comes up there and **stays up**. **Slide** to aim (as many
+  swipes as you like), tap another spot to move the scope, **✕** lowers the rifle. Press **FIRE** with
+  the other thumb. **+ / −** change the magnification (4–16×).
+- **Levels:** the first buck is close and stands broadside. Each buck you drop moves you up a level
+  (farther, then walking, trotting and running, in fading light). Ammunition is unlimited, but if
+  **3 bucks you shot at get away** (missed or wounded), the hunt is over.
+- **⛶ Full screen** works on Android. iPhone Safari can't go full screen: add the game to the home
+  screen (Share → Add to Home Screen) and open it from there.
 - A .308 sighted in at 200 m. Use the numbered marks under the crosshair for 300–1000 m, the scale at
   the bottom left to judge range (no rangefinder), and aim ahead of moving bucks.
-- 10 rounds per hunt. Heart/lung and head shots score best; gut, rump and leg shots only wound, and a
-  wounded buck that gets away costs points. Scores are saved to a shared party leaderboard.
+- Heart/lung and head shots score best; gut, rump and leg shots only wound, and a wounded buck that
+  gets away costs points and a strike. Scores and the level reached go on a shared party leaderboard.
 
 Everything in the game (the woods, the buck, the sounds) is drawn by code. See
 **[docs/GAME.md](docs/GAME.md)** for how it works.

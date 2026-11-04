@@ -44,12 +44,17 @@ export function drawScope(ctx: CanvasRenderingContext2D, s: ScopeDraw) {
   ctx.fillStyle = g;
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
 
-  // black surround
-  ctx.fillStyle = "#000";
-  ctx.beginPath();
-  ctx.rect(0, 0, w, h);
-  ctx.arc(cx, cy, r - 0.5, 0, Math.PI * 2, true);
-  ctx.fill("evenodd");
+  // the scope tube: a dark rim with a soft shadow around it (the dimmed view shows outside)
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,0.7)";
+  ctx.shadowBlur = 18;
+  ctx.lineWidth = 9;
+  ctx.strokeStyle = "#0b0b0b";
+  ctx.beginPath(); ctx.arc(cx, cy, r + 3.5, 0, Math.PI * 2); ctx.stroke();
+  ctx.restore();
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = "rgba(255,255,255,0.12)";
+  ctx.beginPath(); ctx.arc(cx, cy, r + 8, 0, Math.PI * 2); ctx.stroke();
 
   // reticle (moves with the tube during recoil)
   ctx.save();

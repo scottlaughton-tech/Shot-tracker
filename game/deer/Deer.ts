@@ -4,13 +4,23 @@ import { BODY, ORGANS, TAG_ZONE } from "./anatomy";
 import { DeerAnimator, type HeadMode, type TailMode } from "./anim";
 import { antlerMaterial, buildAntlers, type Rack } from "./antlers";
 import { makeRig, type DeerAsset, type DeerRig } from "./model";
-import { nearestCover, type P2 } from "./routes";
+import { nearestCover, type P2, type Route } from "./routes";
 import { primDist, type Prim } from "./sdf";
 import { primaryZone, ZONES, type Gait, type Outcome, type Zone } from "../scoring";
 import { SPEED_OF_SOUND } from "../ballistics";
 import { gruntSound, snortSound, twigSound } from "../engine/audio";
 
-export type DeerState = "travel" | "feed" | "look" | "alert" | "flee" | "kick" | "wounded" | "dying" | "dead" | "gone";
+export type DeerState = "travel" | "pose" | "feed" | "look" | "alert" | "flee" | "kick" | "wounded" | "dying" | "dead" | "gone";
+
+/** How a buck behaves; the hunt's level decides this. */
+export type DeerStyle = {
+  /** crossing speed, m/s (walk ~1.4, trot ~3.5, run ~10) */
+  speed: number;
+  /** once out in the open, stand broadside this many seconds (0 = don't) */
+  stand: number;
+  /** stop to feed or look around while crossing */
+  stops: boolean;
+};
 
 export type HitInfo = { zones: Zone[]; primary: Zone; outcome: Outcome; range: number; gait: Gait; point: THREE.Vector3; local: { y: number; z: number } };
 
@@ -49,7 +59,14 @@ export class Deer {
   private clock = 0;
   private gruntT = 4 + Math.random() * 10;
 
-  constructor(readonly id: number, asset: DeerAsset, readonly rack: Rack, route: P2[], private world: World, private events: DeerEvents, rnd: () => number) {
+  private standLeft = 0;
+  private stood = false;
+
+  private poseAt: number;
+
+  constructor(readonly id: number, asset: DeerAsset, readonly rack: Rack, plan: Route, private world: World, private events: DeerEvents, rnd: () => number, style: DeerStyle) {
+    const route = plan.points;
+    this.poseAt = plan.poseAt;
     this.rig = makeRig(asset);
     const ant = buildAntlers(rack, 1000 + id * 17);
     const antlers = new THREE.Mesh(ant.geometry, antlerMaterial());
@@ -61,11 +78,11 @@ export class Deer {
     this.route = route;
     this.pos.set(route[0].x, world.heightAt(route[0].x, route[0].z), route[0].z);
     this.heading = Math.atan2(route[1].x - route[0].x, route[1].z - route[0].z);
-    const g = rnd();
-    this.travelSpeed = g < 0.68 ? 1.2 + rnd() * 0.5 : g < 0.9 ? 3.0 + rnd() * 1.0 : 8.5 + rnd() * 3;
+    this.travelSpeed = style.speed * (0.9 + rnd() * 0.2);
     this.head = this.travelSpeed < 2 ? (rnd() < 0.5 ? "cruise" : "relaxed") : "relaxed";
-    this.nextStop = 6 + rnd() * 14;
-    if (this.travelSpeed > 7) { this.tail = "flag"; this.nextStop = 1e9; }
+    this.nextStop = style.stops ? 6 + rnd() * 14 : 1e9;
+    this.standLeft = style.stand;
+    if (this.travelSpeed > 7) { this.tail = "flag"; this.nextStop = 1e9; this.standLeft = 0; }
     this.sync(0);
   }
 
@@ -112,8 +129,11 @@ export class Deer {
     let target = 0;
     let lookYaw = 0;
     switch (this.state) {
-      case "travel":
+      case "travel": {
         target = this.travelSpeed;
+        // a long way to his spot: he trots in, then slows to a walk for the last stretch
+        const spot = this.route[this.poseAt];
+        if (this.wp <= this.poseAt && spot && Math.hypot(spot.x - this.pos.x, spot.z - this.pos.z) > 45) target = Math.max(target, 3.2);
         this.nextStop -= dt;
         // rutting bucks grunt now and then while they cruise
         this.gruntT -= dt;
@@ -122,13 +142,30 @@ export class Deer {
           const dist = this.pos.distanceTo(this.world.eye);
           if (dist < 320 && this.travelSpeed < 5 && Math.random() < 0.6) gruntSound(dist / SPEED_OF_SOUND, dist, this.azimuth());
         }
-        if (this.nextStop <= 0 && this.wp > 2 && this.wp < this.route.length - 1) {
+        if (this.nextStop <= 0 && this.wp > this.poseAt && this.wp < this.route.length - 1) {
           const r = Math.random();
           this.state = r < 0.55 ? "feed" : "look";
           this.timer = this.state === "feed" ? 5 + Math.random() * 9 : 2 + Math.random() * 3;
           this.nextStop = 8 + Math.random() * 16;
         }
         break;
+      }
+      case "pose": {
+        // standing broadside to the stand: turn side-on, then hold still, looking around
+        const los = Math.atan2(this.pos.x - this.world.eye.x, this.pos.z - this.world.eye.z);
+        let best = los + Math.PI / 2, d = best - this.heading;
+        while (d > Math.PI) d -= Math.PI * 2;
+        while (d < -Math.PI) d += Math.PI * 2;
+        if (Math.abs(d) > Math.PI / 2) { best = los - Math.PI / 2; d = best - this.heading; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; }
+        const turning = Math.abs(d) > 0.08;
+        if (turning) this.heading += Math.sign(d) * Math.min(Math.abs(d), 0.9 * dt);
+        target = turning ? 0.45 : 0;
+        this.head = this.timer % 7 < 2.5 ? "alert" : "relaxed";
+        if (this.head === "alert") lookYaw = this.lookToward();
+        this.timer -= dt;
+        if (this.timer <= 0) { this.state = "travel"; this.head = "cruise"; }
+        break;
+      }
       case "feed": target = 0; this.head = "feed"; this.timer -= dt; if (this.timer <= 0) { this.state = "travel"; this.head = "cruise"; } break;
       case "look": target = 0; this.head = "alert"; lookYaw = this.lookToward(); this.timer -= dt; if (this.timer <= 0) { this.state = "travel"; this.head = "relaxed"; } break;
       case "alert":
@@ -176,6 +213,12 @@ export class Deer {
           if (this.wp === 2 && this.state === "travel") {
             const dist = this.pos.distanceTo(this.world.eye);
             if (dist < 260 && Math.random() < 0.55) twigSound(dist / SPEED_OF_SOUND, dist, this.azimuth());
+          }
+          // at his spot: easy bucks stop and stand broadside for a while
+          if (this.wp === this.poseAt + 1 && this.state === "travel" && this.standLeft > 0 && !this.stood) {
+            this.stood = true;
+            this.state = "pose";
+            this.timer = this.standLeft;
           }
           if (this.wp >= this.route.length) this.leave();
         }

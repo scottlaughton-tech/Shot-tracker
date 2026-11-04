@@ -30,43 +30,49 @@ export function coverPoints(): CoverPoint[] {
   return pts;
 }
 
-/** Pick a range band: mostly 80–450 m, sometimes farther. */
-export function pickRange(rnd: () => number): [number, number] {
-  const r = rnd();
-  if (r < 0.28) return [70, 200];
-  if (r < 0.66) return [200, 380];
-  if (r < 0.88) return [380, 600];
-  if (r < 0.97) return [600, 800];
-  return [800, 950];
-}
-
 function open(x: number, z: number) { return openness(x, z) > 0.95 && sampleGround(x, z).hedge < 0.2; }
 
+export type Route = { points: P2[]; /** index of the spot where he stops broadside */ poseAt: number };
+
 /**
- * A route: start hidden in the cover, walk out, cross the open ground with a few turns,
- * and leave into cover somewhere else. Returns waypoints (the first and last are in cover).
+ * A route for one buck: start hidden in the cover, walk out, come to a spot inside the given
+ * range band (where an easy buck stops broadside), cross the field within the band, and leave
+ * into cover somewhere else. The cover may be outside the band; he walks (or trots) to it.
  */
-export function makeRoute(rnd: () => number): P2[] | null {
+export function makeRoute(rnd: () => number, range: [number, number], maxAzim = VIEW): Route | null {
   const pts = coverPoints();
-  const [lo, hi] = pickRange(rnd);
-  const band = pts.filter((p) => p.range >= lo && p.range <= hi);
-  if (!band.length) return null;
-  const a = band[Math.floor(rnd() * band.length)];
+  const [lo, hi] = range;
+  const near = pts.filter((p) => p.range >= lo - 60 && p.range <= hi + 220 && Math.abs(p.azim) <= maxAzim + 0.15);
+  if (!near.length) return null;
+  // prefer cover close to the band, so he isn't walking for minutes
+  near.sort((p, q) => Math.abs(p.range - (lo + hi) / 2) - Math.abs(q.range - (lo + hi) / 2));
+  const a = near[Math.floor(Math.pow(rnd(), 2) * Math.min(near.length, 60))];
   const start = { x: a.x - a.outX * 18, z: a.z - a.outZ * 18 };
-  const out = { x: a.x + a.outX * (15 + rnd() * 25), z: a.z + a.outZ * (15 + rnd() * 25) };
+  const out = { x: a.x + a.outX * (12 + rnd() * 15), z: a.z + a.outZ * (12 + rnd() * 15) };
   if (!open(out.x, out.z)) return null;
   const route: P2[] = [start, { x: a.x, z: a.z }, out];
-  // cross the field, mostly sideways to the shooter at a similar range
-  let cur = out;
-  const legs = 1 + Math.floor(rnd() * 3);
+  // the spot inside the band, roughly in his direction from the stand
+  let target: P2 | null = null;
+  for (let tries = 0; tries < 16 && !target; tries++) {
+    const r = lo + rnd() * (hi - lo);
+    const az = Math.max(-maxAzim, Math.min(maxAzim, a.azim + (rnd() - 0.5) * 0.35));
+    const x = r * Math.sin(az), z = -r * Math.cos(az);
+    if (open(x, z) && open((x + out.x) / 2, (z + out.z) / 2)) target = { x, z };
+  }
+  if (!target) return null;
+  route.push(target);
+  const poseAt = route.length - 1;
+  // cross the field, mostly sideways to the shooter, staying near the band
+  let cur = target;
+  const legs = 1 + Math.floor(rnd() * 2);
   for (let i = 0; i < legs; i++) {
     let ok = false;
     for (let tries = 0; tries < 12 && !ok; tries++) {
       const r0 = Math.hypot(cur.x, cur.z);
-      const az = Math.atan2(cur.x, -cur.z) + (rnd() - 0.5) * 0.7;
-      const rr = Math.max(60, Math.min(950, r0 + (rnd() - 0.5) * 160));
+      const az = Math.atan2(cur.x, -cur.z) + (rnd() - 0.5) * 0.6;
+      const rr = Math.max(lo * 0.85, Math.min(hi * 1.1, r0 + (rnd() - 0.5) * 100));
       const nx = rr * Math.sin(az), nz = -rr * Math.cos(az);
-      if (Math.abs(az) < VIEW && open(nx, nz) && open((nx + cur.x) / 2, (nz + cur.z) / 2)) { cur = { x: nx, z: nz }; route.push(cur); ok = true; }
+      if (Math.abs(az) < maxAzim + 0.08 && open(nx, nz) && open((nx + cur.x) / 2, (nz + cur.z) / 2)) { cur = { x: nx, z: nz }; route.push(cur); ok = true; }
     }
   }
   // leave at the nearest cover point that isn't where we came in
@@ -74,7 +80,7 @@ export function makeRoute(rnd: () => number): P2[] | null {
   const e = exits[Math.floor(rnd() * Math.min(4, exits.length))];
   if (!e) return null;
   route.push({ x: e.x + e.outX * 3, z: e.z + e.outZ * 3 }, { x: e.x - e.outX * 20, z: e.z - e.outZ * 20 });
-  return route;
+  return { points: route, poseAt };
 }
 
 /** Nearest cover (for a spooked or wounded buck), preferring away from `from`. */

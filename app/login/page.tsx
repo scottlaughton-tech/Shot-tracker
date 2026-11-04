@@ -4,8 +4,9 @@ import LoginForm from "@/components/LoginForm";
 
 export const dynamic = "force-dynamic";
 
-export default async function LoginPage() {
-  if (await isAuthed()) redirect("/");
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
+  const next = (await searchParams).next;
+  if (await isAuthed()) redirect(next && next.startsWith("/") && !next.startsWith("//") ? next : "/");
   const mode = authMode();
   return (
     <main className="center-page">

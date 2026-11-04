@@ -14,7 +14,9 @@ export default function LoginForm() {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }),
     });
     setBusy(false);
-    if (res.ok) window.location.href = "/";
+    // go back to where they were headed (only paths on this site)
+    const next = new URLSearchParams(window.location.search).get("next") ?? "/";
+    if (res.ok) window.location.href = next.startsWith("/") && !next.startsWith("//") ? next : "/";
     else setError("That passcode isn't right.");
   }
 
