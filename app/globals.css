@@ -544,3 +544,18 @@ p { margin: 0; }
 .g-buck.escaped { border-color: #adb5bd; }
 .g-lower { font-size: 22px; background: rgba(120,20,20,0.6); margin-bottom: 4px; }
 .g-help ol { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; line-height: 1.4; }
+/* controls screen: two-way and three-way choices */
+.g-row .g-btn { padding-left: 6px; padding-right: 6px; }
+.g-set { display: flex; flex-direction: column; gap: 6px; }
+.g-seg { display: flex; gap: 6px; }
+.g-seg button {
+  flex: 1; padding: 10px 8px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.25);
+  background: rgba(255,255,255,0.08); color: #fff; font-size: 16px; font-weight: 700;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+}
+.g-seg button.on { background: #d9480f; border-color: #d9480f; }
+.g-seg small { font-size: 12.5px; font-weight: 500; opacity: 0.9; line-height: 1.3; }
+.g-card.compact { gap: 9px; padding: 14px 20px; }
+.g-card.compact h1 { font-size: 24px; }
+.g-card.compact .g-sub { font-size: 14px; }
+.g-card.compact .g-btn { padding: 11px; }

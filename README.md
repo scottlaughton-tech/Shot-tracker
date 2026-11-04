@@ -93,6 +93,8 @@ Tap the **🦌** at the top left of the map. Hold the phone sideways.
 - **Tap** where you want to look: the scope comes up there and **stays up**. **Slide** to aim (as many
   swipes as you like), tap another spot to move the scope, **✕** lowers the rifle. Press **FIRE** with
   the other thumb. **+ / −** change the magnification (4–16×).
+- **Controls** (on the game's menu): **Reversed** makes sliding work like dragging a photo (slide right,
+  the scope moves left), and **Aim speed** can be Slow, Normal or Fast. Saved on each phone.
 - **Buck out!** A soft chime and a banner say when a buck steps out and which side he's on; a yellow
   ring marks him for a few seconds (with the scope up, an arrow on its edge points his way).
 - **Levels:** the first buck is close and stands broadside. Each buck you drop moves you up a level

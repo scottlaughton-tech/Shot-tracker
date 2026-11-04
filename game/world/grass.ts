@@ -8,6 +8,7 @@ import { MEADOW_HEIGHT, sampleGroundFast, type Ground } from "./layout";
 import { hash2, smoothstep } from "./noise";
 import { makeClump } from "./treeGen";
 import { foliageMaterial, foliageDepthMaterial } from "./vegMaterials";
+import { uploadInstances } from "./instances";
 
 const BASE_CELL = 0.55;   // m, finest grid
 const MAX_LEVEL = 5;
@@ -55,8 +56,18 @@ export class Grass {
     if (key === this.lastKey) return;
     this.lastKey = key;
     for (const k of [this.grass, this.hay, this.rod, this.fern]) k.n = 0;
-    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(), col = new THREE.Color();
-    const up = new THREE.Vector3(0, 1, 0);
+    // write each clump straight into the instance arrays: a turn about the vertical, a size, a tint
+    let cr = 1, sr = 0;
+    const put = (k: Kind, x: number, y: number, z: number, sx: number, sy: number, r: number, gg: number, b: number) => {
+      const m = k.mesh.instanceMatrix.array as Float32Array, c = k.mesh.instanceColor!.array as Float32Array;
+      const o = k.n * 16;
+      m[o] = cr * sx; m[o + 1] = 0; m[o + 2] = -sr * sx; m[o + 3] = 0;
+      m[o + 4] = 0; m[o + 5] = sy; m[o + 6] = 0; m[o + 7] = 0;
+      m[o + 8] = sr * sx; m[o + 9] = 0; m[o + 10] = cr * sx; m[o + 11] = 0;
+      m[o + 12] = x; m[o + 13] = y; m[o + 14] = z; m[o + 15] = 1;
+      c[k.n * 3] = r; c[k.n * 3 + 1] = gg; c[k.n * 3 + 2] = b;
+      k.n++;
+    };
     const g = this.g;
     rMin = Math.max(5, rMin);
     rMax = Math.min(1500, rMax);
@@ -74,8 +85,19 @@ export class Grass {
       let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
       for (const [r, a] of pts) { const x = r * Math.sin(a), z = -r * Math.cos(a); minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z); }
       const total = this.grass.n;
+      const t0 = Math.tan(a0), t1 = Math.tan(a1);
       for (let cz = Math.floor(minZ / cell); cz <= Math.ceil(maxZ / cell); cz++) {
-        for (let cx = Math.floor(minX / cell); cx <= Math.ceil(maxX / cell); cx++) {
+        // only the stretch of this row inside the wedge (scanning the whole bounding box wasted ~80%
+        // of the work when the scope looks off to one side); rows by the stand scan the whole box
+        const zA = cz * cell, zB = zA + cell;
+        let cx0 = Math.floor(minX / cell), cx1 = Math.ceil(maxX / cell);
+        if (zB < -1 && Math.abs(a0) < 1.4 && Math.abs(a1) < 1.4) {
+          const lo = Math.min(-zA * t0, -zB * t0), hi = Math.max(-zA * t1, -zB * t1);
+          const reach = Math.sqrt(Math.max(0, r1 * r1 - zB * zB));
+          cx0 = Math.max(cx0, Math.floor(Math.max(lo, -reach) / cell) - 1);
+          cx1 = Math.min(cx1, Math.ceil(Math.min(hi, reach) / cell));
+        }
+        for (let cx = cx0; cx <= cx1; cx++) {
           if (this.grass.n >= CAP) break;
           const x = (cx + hash2(cx, cz, level * 7 + 1)) * cell, z = (cz + hash2(cx, cz, level * 7 + 2)) * cell;
           const r = Math.hypot(x, z), a = Math.atan2(x, -z);
@@ -83,15 +105,12 @@ export class Grass {
           sampleGroundFast(x, z, g);
           const y = this.heightAt(x, z);
           const h1 = hash2(cx, cz, level * 7 + 3), h2 = hash2(cx, cz, level * 7 + 4);
-          q.setFromAxisAngle(up, h1 * Math.PI * 2);
+          cr = Math.cos(h1 * Math.PI * 2); sr = Math.sin(h1 * Math.PI * 2);
           if (g.open < 0.35) {
             // bush floor: a few dead ferns near the edge
             if (g.edge > -25 && h2 < 0.25 && this.fern.n < 2000) {
               const sz = Math.max(cell * 1.3, 0.9);
-              p.set(x, y, z); s.set(sz, 0.6 + h1 * 0.4, sz);
-              m4.compose(p, q, s);
-              col.setRGB(0.9 + h2 * 0.3, 0.85 + h2 * 0.2, 0.8);
-              this.fern.mesh.setMatrixAt(this.fern.n, m4); this.fern.mesh.setColorAt(this.fern.n, col); this.fern.n++;
+              put(this.fern, x, y, z, sz, 0.6 + h1 * 0.4, 0.9 + h2 * 0.3, 0.85 + h2 * 0.2, 0.8);
             }
             continue;
           }
@@ -102,43 +121,24 @@ export class Grass {
           if (level >= 2 && height < 0.22) continue;
           if (level >= 2 && h1 > 0.65) continue; // thinner with distance: the ground colour carries it
           if (level >= 3 && h2 > 0.5) continue;
-          p.set(x, y, z);
-          if (false) {
-            // hay stubble: only worth drawing as clumps right up close; farther out the
-            // ground texture reads better than rows of little cards
-            if (this.hay.n >= 9000 || r / magnification > 9) continue;
-            const w = Math.min(cell * 1.15, height * 2.4);
-            s.set(w, height, w);
-            m4.compose(p, q, s);
-            const t = hash2(cx, cz, 98);
-            col.setRGB(0.92 + 0.12 * t, 0.98 + 0.08 * h2, 0.8 + 0.08 * t);
-            this.hay.mesh.setMatrixAt(this.hay.n, m4); this.hay.mesh.setColorAt(this.hay.n, col); this.hay.n++;
-            continue;
-          }
           const hgt = height * (0.7 + 0.3 * smoothstep(0.35, 0.8, g.open));
           // colour drifts smoothly across the field (patches), with a little per-clump variety close up
           const drift = 0.5 + 0.5 * Math.sin(x * 0.031 + Math.sin(z * 0.023) * 2.1) * Math.cos(z * 0.027 - x * 0.011);
           const t = level === 0 ? hash2(cx, cz, 99) * 0.6 + drift * 0.4 : drift;
-          if (tall > 0.5) col.setRGB(0.98 + 0.14 * t, 0.94 + 0.1 * t, 0.86 + 0.05 * t);
-          else col.setRGB(0.96 + 0.1 * t, 0.97 + 0.08 * t, 0.82 + 0.05 * t);
+          const cr0 = tall > 0.5 ? 0.98 + 0.14 * t : 0.96 + 0.1 * t;
+          const cg0 = tall > 0.5 ? 0.94 + 0.1 * t : 0.97 + 0.08 * t;
+          const cb0 = tall > 0.5 ? 0.86 + 0.05 * t : 0.82 + 0.05 * t;
           if (level === 0) {
             const width = Math.min(cell * (1.25 + 0.4 * h1), Math.max(0.8, height * 3));
-            m4.compose(p, q, s.set(width, hgt, width));
-            this.grass.mesh.setMatrixAt(this.grass.n, m4); this.grass.mesh.setColorAt(this.grass.n, col); this.grass.n++;
+            put(this.grass, x, y, z, width, hgt, cr0, cg0, cb0);
           } else if (this.hay.n < 9000) {
-            const width = cell * (1.6 + 0.3 * h1);
-            m4.compose(p, q, s.set(width, hgt, width));
-            this.hay.mesh.setMatrixAt(this.hay.n, m4); this.hay.mesh.setColorAt(this.hay.n, col); this.hay.n++;
+            put(this.hay, x, y, z, cell * (1.6 + 0.3 * h1), hgt, cr0, cg0, cb0);
           }
           // goldenrod patches in the old field
           if (tall > 0.5 && this.rod.n < 3000) {
             const patch = Math.sin(x * 0.07 + Math.sin(z * 0.05) * 2) * Math.cos(z * 0.06 - x * 0.02);
             if (patch > 0.5 && h1 > 0.62) {
-              const rw = Math.min(cell * 1.2, 1.1);
-              s.set(rw, 0.72 + 0.3 * h2, rw);
-              m4.compose(p, q, s);
-              col.setRGB(1, 1, 1);
-              this.rod.mesh.setMatrixAt(this.rod.n, m4); this.rod.mesh.setColorAt(this.rod.n, col); this.rod.n++;
+              put(this.rod, x, y, z, Math.min(cell * 1.2, 1.1), 0.72 + 0.3 * h2, 1, 1, 1);
             }
           }
         }
@@ -148,8 +148,7 @@ export class Grass {
     }
     for (const k of [this.grass, this.hay, this.rod, this.fern]) {
       k.mesh.count = k.n;
-      k.mesh.instanceMatrix.needsUpdate = true;
-      if (k.mesh.instanceColor) k.mesh.instanceColor.needsUpdate = true;
+      uploadInstances(k.mesh, k.n);
     }
   }
 }

@@ -7,6 +7,7 @@ import { hash2, mulberry32, smoothstep } from "./noise";
 import { barkTexture } from "./foliageTextures";
 import type { Photos } from "./photoTextures";
 import { makeTree, type Species, type TreeModel, type BarkKind } from "./treeGen";
+import { uploadInstances } from "./instances";
 import {
   bakeAlbedoMaterial, bakeNormalMaterial, barkMaterial, foliageDepthMaterial, foliageMaterial,
   impostorDepthMaterial, impostorMaterial, type BarkLook,
@@ -353,65 +354,87 @@ export class Forest {
     return { albedo: albedoRT.texture, normals: normalRT.texture, cells };
   }
 
+  // per-tree values the view test needs, worked out once (and the shadow tips once per sun position)
+  private angR: Float32Array | null = null;
+  private tipAz: Float32Array | null = null;
+  private tipKey = "";
+
+  private prepare(shadow?: ShadowReach) {
+    const inst = this.instances, n = inst.length;
+    if (!this.angR) {
+      this.angR = new Float32Array(n);
+      for (let i = 0; i < n; i++) { const t = inst[i]; this.angR[i] = Math.atan2(this.models[t.model].radius * Math.abs(t.s), t.dist); }
+    }
+    if (!shadow) return;
+    const key = `${shadow.dx.toFixed(3)}|${shadow.dz.toFixed(3)}|${shadow.k.toFixed(2)}|${shadow.max}`;
+    if (key === this.tipKey) return;
+    this.tipKey = key;
+    this.tipAz ??= new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const t = inst[i];
+      const L = Math.min(shadow.max, this.models[t.model].height * t.s * shadow.k);
+      this.tipAz[i] = Math.atan2(t.x + shadow.dx * L, -(t.z + shadow.dz * L));
+    }
+  }
+
   /**
-   * Choose full models vs impostors for the current view. Cheap enough to run every frame,
-   * but skipped unless the view (direction or magnification) has changed.
+   * Choose full models vs impostors for the current view (and keep trees just out of view whose
+   * shadows fall into it). Run only when the view has moved enough (see Game.refreshVegetation).
    */
   update(yaw: number, halfH: number, magnification: number, shadow?: ShadowReach) {
-    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), pos = new THREE.Vector3();
-    const col = new THREE.Color();
+    this.prepare(shadow);
+    const angR = this.angR!, tipAz = shadow ? this.tipAz! : null;
+    const m4 = new THREE.Matrix4(), col = new THREE.Color();
     for (const mm of this.barkMeshes) mm.count = 0;
     for (const mm of this.leafMeshes) mm.count = 0;
     let ni = 0;
     const imp = this.impostors;
     const aCell = imp.geometry.getAttribute("aCell") as THREE.InstancedBufferAttribute;
     const aSize = imp.geometry.getAttribute("aSize") as THREE.InstancedBufferAttribute;
-    const up = new THREE.Vector3(0, 1, 0);
-    for (const t of this.instances) {
+    const im = imp.instanceMatrix.array as Float32Array, ic = imp.instanceColor!.array as Float32Array;
+    const ca = aCell.array as Float32Array, sa = aSize.array as Float32Array;
+    const inst = this.instances, n = inst.length;
+    for (let i = 0; i < n; i++) {
+      const t = inst[i];
       // horizontal visibility (trees are tall, so pitch is checked loosely)
-      let da = t.azim - yaw;
-      const angR = Math.atan2(this.models[t.model].radius * Math.abs(t.s), t.dist);
-      let seen = Math.abs(da) <= halfH + angR;
-      if (!seen && shadow) {
+      const da = t.azim - yaw, r = angR[i];
+      const seen = da <= halfH + r && da >= -halfH - r;
+      if (!seen) {
+        if (!tipAz) continue;
         // out of view, but its shadow may fall into it (the sun is low): keep it as a cheap caster
-        const L = Math.min(shadow.max, this.models[t.model].height * t.s * shadow.k);
-        const tip = Math.atan2(t.x + shadow.dx * L, -(t.z + shadow.dz * L)) - yaw;
-        const lo = Math.min(da, tip) - angR, hi = Math.max(da, tip) + angR;
-        if (hi < -halfH || lo > halfH) continue;
-      } else if (!seen) continue;
-      const eff = t.dist / magnification;
-      pos.set(t.x, t.y, t.z);
-      sc.setScalar(t.s);
-      col.setScalar(t.shade);
+        const tp = tipAz[i] - yaw;
+        if ((da < tp ? da : tp) - r > halfH || (da > tp ? da : tp) + r < -halfH) continue;
+      }
+      const s = t.s;
       // full models only for trees that can actually be seen: near the edge of the cover
-      if (seen && eff < LOD_NEAR && t.depth < 16) {
+      if (seen && t.dist / magnification < LOD_NEAR && t.depth < 16) {
         const bark = this.barkMeshes[t.model], leaf = this.leafMeshes[t.model];
         if (bark.count < bark.instanceMatrix.count) {
-          q.setFromAxisAngle(up, t.rot);
-          m4.compose(pos, q, sc);
+          const c = Math.cos(t.rot) * s, sn = Math.sin(t.rot) * s;
+          m4.set(c, 0, sn, t.x, 0, s, 0, t.y, -sn, 0, c, t.z, 0, 0, 0, 1);
+          col.setScalar(t.shade);
           bark.setMatrixAt(bark.count, m4); bark.setColorAt(bark.count, col); bark.count++;
           leaf.setMatrixAt(leaf.count, m4); leaf.setColorAt(leaf.count, col); leaf.count++;
           continue;
         }
       }
-      q.identity();
-      m4.compose(pos, q, sc);
-      imp.setMatrixAt(ni, m4);
-      imp.setColorAt(ni, col);
-      const c = this.impCells[t.model];
-      aCell.setXYZW(ni, c.uv[0], c.uv[1], c.uv[2], c.uv[3]);
-      aSize.setXYZ(ni, c.w, c.h, c.y0);
+      // impostor: position and size only (it turns to face the camera in the shader)
+      const o = ni * 16;
+      im[o] = s; im[o + 1] = 0; im[o + 2] = 0; im[o + 3] = 0;
+      im[o + 4] = 0; im[o + 5] = s; im[o + 6] = 0; im[o + 7] = 0;
+      im[o + 8] = 0; im[o + 9] = 0; im[o + 10] = s; im[o + 11] = 0;
+      im[o + 12] = t.x; im[o + 13] = t.y; im[o + 14] = t.z; im[o + 15] = 1;
+      ic[ni * 3] = ic[ni * 3 + 1] = ic[ni * 3 + 2] = t.shade;
+      const cell = this.impCells[t.model];
+      ca[ni * 4] = cell.uv[0]; ca[ni * 4 + 1] = cell.uv[1]; ca[ni * 4 + 2] = cell.uv[2]; ca[ni * 4 + 3] = cell.uv[3];
+      sa[ni * 3] = cell.w; sa[ni * 3 + 1] = cell.h; sa[ni * 3 + 2] = cell.y0;
       ni++;
-      da = 0;
     }
     imp.count = ni;
-    imp.instanceMatrix.needsUpdate = true;
-    if (imp.instanceColor) imp.instanceColor.needsUpdate = true;
-    aCell.needsUpdate = true;
-    aSize.needsUpdate = true;
-    for (const mm of [...this.barkMeshes, ...this.leafMeshes]) {
-      mm.instanceMatrix.needsUpdate = true;
-      if (mm.instanceColor) mm.instanceColor.needsUpdate = true;
+    uploadInstances(imp, ni, [aCell, aSize]);
+    for (let k = 0; k < this.barkMeshes.length; k++) {
+      uploadInstances(this.barkMeshes[k], this.barkMeshes[k].count);
+      uploadInstances(this.leafMeshes[k], this.leafMeshes[k].count);
     }
   }
 

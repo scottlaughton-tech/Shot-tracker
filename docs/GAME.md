@@ -16,6 +16,11 @@ load time: there are no 3D model or audio files. The only image files are CC0 ph
   Around the scope the open view is shown as a dimmed, greyed still taken when the scope came up
   (re-rendering it live would cost a second full render, and the tree/grass detail is set up for
   the scope view by then). The circle sits over the spot it's looking at, kept clear of the buttons.
+- **Controls screen** (`ControlsCard` in GameRoot, `game/ui/controls.ts`, saved in localStorage
+  `st:game-controls` per phone): **Normal** (slide right → aim right, gain 0.65 scope widths per scope
+  width) or **Reversed** = drag the view (the picture follows the finger 1:1, so the aim moves the
+  other way: `Game.dragView`), and **Aim speed** Slow/Normal/Fast (×0.6/1/1.6, `Game.aimSpeed`). The
+  finger speed used for acceleration is smoothed across touch events and reset at each new slide.
 - **FIRE** (right thumb), **+ / −** magnification 4–16×. Desktop: hold the mouse, Space/F fires, +/− zoom.
 - Unlimited ammunition: 5 in the rifle, then a 3.2 s reload. 1.25 s bolt cycle between shots.
 - **Levels** (`LEVELS` in `game/engine/Hunt.ts`): one buck at a time. Level 1 stands broadside at
@@ -103,7 +108,12 @@ public/game/tex/           photo textures (see CREDITS.txt) and atlas.webp
     within 16 m of the edge of the cover (deeper ones are hidden anyway);
   - grass is generated only for the ground currently in view, on a grid whose cell size grows
     with `distance ÷ magnification`, so the scope at 16× shows dense grass around a buck 400 m away.
-  - Vegetation is rebuilt only when the view has moved ~18% of its width (`Game.refreshVegetation`).
+  - Vegetation is rebuilt only when the view has moved ~18% of its width (`Game.refreshVegetation`),
+    and while sweeping the trees and the grass take turns (one per frame) so no frame does both.
+    Each rebuild uploads only the instances in use (`world/instances.ts`; re-sending whole buffers
+    was ~10 MB per rebuild and made sweeps stutter), the tree test uses per-tree values worked out
+    once (`Forest.prepare`), and grass scans only the part of each grid row inside the view wedge.
+    Worst frame in a scope sweep: ~3–4 ms of CPU on a desktop (was 15–30 ms).
   - The sun is low (WSW), so trees just outside the view still cast shadows into it: `Forest.update`
     also keeps (as impostors) trees whose shadow reaches the view (`ShadowReach`). Without this,
     shadows (and the shading of trees in view) switched on and off as the scope swept.
@@ -168,6 +178,8 @@ public/game/tex/           photo textures (see CREDITS.txt) and atlas.webp
   scope opens where you tap and stays up, full-screen button; then (first real-phone test) trees
   popping in the scope fixed, faster pace (bucks out ~2 s after being sent, short walk to their
   spot, 2–3.5 s between bucks), and a "Buck out!" alert (banner, chime, ring / scope-rim arrow).
+  Then (party feedback): Controls screen with reversed slide (drag the view) and aim speed, and much
+  cheaper vegetation rebuilds so sweeping the scope is smooth.
 - Waiting on the owner's real-phone test: load time, smoothness (open view and scope), aim speed,
   whether level 1 is easy enough, sound, anything that looks wrong. Tune from their answers.
 - Test scripts used during development (Playwright, SwiftShader) lived in the session scratchpad and

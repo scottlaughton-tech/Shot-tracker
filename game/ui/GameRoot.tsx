@@ -1,15 +1,17 @@
 "use client";
 // Screens and touch controls for the hunting game. The 3D engine lives in game/engine.
-//  - one finger anywhere (not on a button) = scope up, slide to aim, lift to lower the rifle
+//  - tap the field = scope up right there (it stays up); slide to aim; ✕ lowers the rifle
 //  - FIRE button (right thumb) shoots, + / − change magnification
+//  - Controls screen: normal or reversed slide, aim speed (saved on the phone)
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Game, Hud } from "../engine/Game";
 import { STRIKES, type Banner, type HuntStatus, type HuntSummary } from "../engine/Hunt";
 import type { GameScore } from "@/lib/store";
 import { isMuted, setMuted, startAmbience, unlockAudio } from "../engine/audio";
 import DeerDiagram from "./DeerDiagram";
+import { DEFAULT_CONTROLS, loadControls, saveControls, SPEED_FACTOR, type AimSpeed, type Controls } from "./controls";
 
-type Screen = "menu" | "play" | "results" | "board" | "help";
+type Screen = "menu" | "play" | "results" | "board" | "help" | "controls";
 
 /** Real full screen where the browser allows it (Android, desktop); iPhone Safari doesn't. */
 function canFullscreen() {
@@ -48,6 +50,15 @@ export default function GameRoot() {
   const [mute, setMute] = useState(false);
   const [fsTip, setFsTip] = useState(false);
   const [isFs, setIsFs] = useState(false);
+  const [controls, setControls] = useState<Controls>(DEFAULT_CONTROLS);
+  const controlsRef = useRef(controls);
+  const applyControls = (c: Controls) => {
+    controlsRef.current = c;
+    const g = gameRef.current;
+    if (g) { g.dragView = c.dragView; g.aimSpeed = SPEED_FACTOR[c.speed]; }
+  };
+  useEffect(() => { const c = loadControls(); setControls(c); applyControls(c); }, []);
+  const changeControls = (c: Controls) => { setControls(c); saveControls(c); applyControls(c); };
   useEffect(() => {
     const f = () => { setIsFs(!!document.fullscreenElement); gameRef.current?.resize(); };
     document.addEventListener("fullscreenchange", f);
@@ -84,6 +95,7 @@ export default function GameRoot() {
           end: (s) => { setSummary(s); setScreen("results"); aimPointer.current = null; },
         });
         gameRef.current = game;
+        applyControls(controlsRef.current);
         if (location.search.includes("debug")) {
           (window as unknown as { __game: Game }).__game = game;
           (window as unknown as { __audio: unknown }).__audio = await import("../engine/audio");
@@ -147,7 +159,7 @@ export default function GameRoot() {
     if (!g || screen !== "play" || aimPointer.current) return;
     const opened = !g.scoped;
     aimPointer.current = { id: e.pointerId, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), opened };
-    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    try { (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); } catch {} // (can refuse; aiming still works)
     if (opened) { g.openScope(e.clientX, e.clientY); setScopeTip(Date.now()); }
   }, [screen]);
   const onMove = useCallback((e: React.PointerEvent) => {
@@ -244,6 +256,7 @@ export default function GameRoot() {
             )}
             <div className="g-row">
               <button className="g-btn" onClick={() => setScreen("help")}>How to play</button>
+              <button className="g-btn" onClick={() => setScreen("controls")}>Controls</button>
               <button className="g-btn" onClick={() => setScreen("board")}>Leaderboard</button>
             </div>
             {showFsButton && <button className="g-btn" onClick={toggleFullscreen}>{isFs ? "Leave full screen" : "⛶ Full screen"}</button>}
@@ -269,6 +282,7 @@ export default function GameRoot() {
       )}
 
       {screen === "help" && <HowTo onClose={() => setScreen("menu")} />}
+      {screen === "controls" && <ControlsCard value={controls} onChange={changeControls} onClose={() => setScreen("menu")} />}
       {screen === "board" && <Board onClose={() => setScreen(summary ? "results" : "menu")} />}
       {screen === "results" && summary && (
         <Results summary={summary} onAgain={startHunt} onBoard={() => setScreen("board")} onMenu={() => setScreen("menu")} />
@@ -383,6 +397,39 @@ function Board({ onClose }: { onClose: () => void }) {
   );
 }
 
+const SPEEDS: { key: AimSpeed; label: string }[] = [{ key: "slow", label: "Slow" }, { key: "normal", label: "Normal" }, { key: "fast", label: "Fast" }];
+
+function ControlsCard({ value, onChange, onClose }: { value: Controls; onChange: (c: Controls) => void; onClose: () => void }) {
+  return (
+    <div className="g-menu">
+      <div className="g-card wide compact">
+        <h1>Controls</h1>
+        <div className="g-set">
+          <b>Sliding your finger on the scope</b>
+          <div className="g-seg" role="radiogroup" aria-label="Slide direction">
+            <button role="radio" aria-checked={!value.dragView} className={value.dragView ? "" : "on"} onClick={() => onChange({ ...value, dragView: false })}>
+              Normal<small>Slide right and the scope moves right</small>
+            </button>
+            <button role="radio" aria-checked={value.dragView} className={value.dragView ? "on" : ""} onClick={() => onChange({ ...value, dragView: true })}>
+              Reversed<small>Slide right and the scope moves left (like dragging a photo)</small>
+            </button>
+          </div>
+        </div>
+        <div className="g-set">
+          <b>Aim speed</b>
+          <div className="g-seg" role="radiogroup" aria-label="Aim speed">
+            {SPEEDS.map((sp) => (
+              <button key={sp.key} role="radio" aria-checked={value.speed === sp.key} className={value.speed === sp.key ? "on" : ""} onClick={() => onChange({ ...value, speed: sp.key })}>{sp.label}</button>
+            ))}
+          </div>
+        </div>
+        <p className="g-sub">Saved on this phone, so everyone can set their own.</p>
+        <button className="g-btn primary" onClick={onClose}>Done</button>
+      </div>
+    </div>
+  );
+}
+
 function HowTo({ onClose }: { onClose: () => void }) {
   return (
     <div className="g-menu">
@@ -390,7 +437,7 @@ function HowTo({ onClose }: { onClose: () => void }) {
         <h1>How to play</h1>
         <ul>
           <li><b>Look:</b> tap the spot you want to look at. The scope comes up right there and <b>stays up</b>.</li>
-          <li><b>Aim:</b> slide your finger anywhere to move the crosshairs. Lift and slide again as often as you like. A quick swipe moves farther.</li>
+          <li><b>Aim:</b> slide your finger anywhere to move the crosshairs. Lift and slide again as often as you like. A quick swipe moves farther. Prefer it the other way round, or faster or slower? See <b>Controls</b> on the menu.</li>
           <li><b>Look somewhere else:</b> tap another spot outside the scope and it jumps there. The red <b>✕</b> lowers the rifle.</li>
           <li><b>Buck out!</b> When a buck steps out of the bush you hear a soft chime and a banner says which side he&apos;s on. A yellow ring marks him for a few seconds. With the scope up, a yellow arrow on its edge points his way.</li>
           <li><b>Listen:</b> a grunt or a snapping stick means a buck is close. The sound comes from his side.</li>

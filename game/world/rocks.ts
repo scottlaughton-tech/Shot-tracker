@@ -2,6 +2,7 @@
 // glacial erratics out in the field. Lumpy displaced spheres, textured with a triplanar
 // photo texture and lichen patches.
 import * as THREE from "three";
+import { uploadInstances } from "./instances";
 import { sampleGroundFast, STAND, type Ground } from "./layout";
 import { hash2, makeNoise2D, mulberry32 } from "./noise";
 import type { Photos } from "./photoTextures";
@@ -124,6 +125,6 @@ export class Rocks {
       m4.compose(p.set(r.x, r.y, r.z), q, s.setScalar(r.s));
       mesh.setMatrixAt(mesh.count++, m4);
     }
-    for (const m of [...this.near, ...this.far]) m.instanceMatrix.needsUpdate = true;
+    for (const m of [...this.near, ...this.far]) uploadInstances(m, m.count);
   }
 }

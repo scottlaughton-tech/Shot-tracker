@@ -26,6 +26,7 @@ export const WIDE_HFOV = 70; // degrees across the screen in the open view
 export const ZOOMS = [4, 6, 8, 12, 16];
 const FOV_AT_1X = 19.2; // a 4–16× hunting scope shows about 4.8° at 4×
 const AIM_SENSITIVITY = 0.65; // a slow drag across the whole scope moves the aim ~2/3 of a scope width
+const DRAG_GAIN = 1; // "drag the view": the picture moves with the finger
 const MAG_SIZE = 5;
 const ALERT_TIME = 3.5; // seconds the "buck out" marker shows
 // ammunition is unlimited (the hunt ends on three strikes); the magazine still holds 5
@@ -75,6 +76,7 @@ export class Game {
   deerAsset!: DeerAsset;
   hunt: Hunt | null = null;
   private vegView = { yaw: 99, pitch: 99, fov: 0, scoped: false };
+  private grassView = { yaw: 99, pitch: 99, fov: 0, scoped: false };
   /** called every frame with the active camera and how magnified it is */
   updaters: ((dt: number, cam: THREE.PerspectiveCamera, magnification: number) => void)[] = [];
 
@@ -267,14 +269,25 @@ export class Game {
     return Math.hypot(clientX - rect.left - this.scopeCx, clientY - rect.top - this.scopeCy) < this.scopeD / 2;
   }
 
-  /** Slide to aim (relative, like a trackpad; quick swipes go farther). */
+  /** Player settings: "drag the view" (the picture follows the finger) and an aim speed factor. */
+  dragView = false;
+  aimSpeed = 1;
+  private dragSpeed = 0;
+
+  /**
+   * Slide to aim (relative, like a trackpad; quick swipes go farther). Normally the scope aims the
+   * way the finger goes; with `dragView` the picture follows the finger instead (1:1 when slow).
+   */
   moveAim(dx: number, dy: number, t = performance.now()) {
     if (!this.scoped) return;
     const dtm = Math.max(1, t - this.lastMove);
     this.lastMove = t;
-    const speed = Math.hypot(dx, dy) / dtm * 1000; // px/s
-    const accel = 1 + Math.min(2.5, Math.max(0, speed - 250) / 700);
-    const perPx = (THREE.MathUtils.degToRad(this.scopeFov()) / this.scopeD) * AIM_SENSITIVITY * accel;
+    // finger speed, smoothed (single touch events are jittery), starting fresh with each slide
+    const inst = Math.hypot(dx, dy) / dtm * 1000; // px/s
+    this.dragSpeed = dtm > 120 ? inst : this.dragSpeed * 0.6 + inst * 0.4;
+    const accel = 1 + Math.min(2.5, Math.max(0, this.dragSpeed - 250) / 700);
+    const gain = this.dragView ? -DRAG_GAIN : AIM_SENSITIVITY;
+    const perPx = (THREE.MathUtils.degToRad(this.scopeFov()) / this.scopeD) * gain * this.aimSpeed * accel;
     this.aimYaw += dx * perPx;
     this.aimPitch -= dy * perPx;
     this.clampAim();
@@ -608,16 +621,27 @@ void main() {
     const fov = THREE.MathUtils.degToRad(fovDeg);
     const yaw = this.scoped ? this.aimYaw : 0;
     const pitch = this.scoped ? this.aimPitch : this.wideCam.rotation.x;
-    const v = this.vegView;
-    const moved = Math.max(Math.abs(yaw - v.yaw), Math.abs(pitch - v.pitch)) > fov * 0.18;
-    if (!moved && v.fov === fovDeg && v.scoped === this.scoped) return;
-    Object.assign(v, { yaw, pitch, fov: fovDeg, scoped: this.scoped });
+    const off = (v: { yaw: number; pitch: number }) => Math.max(Math.abs(yaw - v.yaw), Math.abs(pitch - v.pitch));
+    const moved = (v: { yaw: number; pitch: number }) => off(v) > fov * 0.18;
+    const t = this.vegView, g = this.grassView;
+    // a new view (scope up/down, zoom) rebuilds everything now; while sweeping, the trees and the
+    // grass take turns (one per frame), so no single frame carries both (the margins cover it)
+    const fresh = t.fov !== fovDeg || t.scoped !== this.scoped || g.fov !== fovDeg || g.scoped !== this.scoped;
+    const doTrees = fresh || moved(t);
+    const doGrass = fresh || (moved(g) && (!doTrees || off(g) > fov * 0.3)); // (never let the grass fall far behind)
+    if (!doTrees && !doGrass) return;
     const margin = this.scoped ? 1.45 : 1.1;
-    // trees just out of view still cast shadows into it (the sun is low in the south-west)
-    const sd = this.sky.sunDir, hl = Math.hypot(sd.x, sd.z) || 1;
-    const shadow = { dx: -sd.x / hl, dz: -sd.z / hl, k: hl / Math.max(0.02, sd.y), max: 160 };
-    this.forest.update(yaw, (fov / 2) * margin + 0.002, mag, shadow);
-    this.rocks.update(yaw, (fov / 2) * margin + 0.002, mag);
+    const half = (fov / 2) * margin + 0.002;
+    if (doTrees) {
+      Object.assign(t, { yaw, pitch, fov: fovDeg, scoped: this.scoped });
+      // trees just out of view still cast shadows into it (the sun is low in the south-west)
+      const sd = this.sky.sunDir, hl = Math.hypot(sd.x, sd.z) || 1;
+      const shadow = { dx: -sd.x / hl, dz: -sd.z / hl, k: hl / Math.max(0.02, sd.y), max: 160 };
+      this.forest.update(yaw, half, mag, shadow);
+      this.rocks.update(yaw, half, mag);
+    }
+    if (!doGrass) return;
+    Object.assign(g, { yaw, pitch, fov: fovDeg, scoped: this.scoped });
     // ground distances visible at the bottom and top of the view
     let rMin: number, rMax: number;
     if (this.scoped) {
@@ -632,7 +656,7 @@ void main() {
     } else {
       rMin = 5; rMax = 360;
     }
-    this.grass.update(rMin, rMax, yaw, (fov / 2) * margin + 0.002, mag);
+    this.grass.update(rMin, rMax, yaw, half, mag);
   }
 
   private fitShadows() {
