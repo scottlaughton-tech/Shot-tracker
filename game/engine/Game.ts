@@ -19,7 +19,7 @@ import { buildFence } from "../world/fence";
 import { dropTable, LOAD_308, stepBullet, zeroAngle, type BulletState } from "../ballistics";
 import { buildDeerAsset, type DeerAsset } from "../deer/model";
 import type { Deer } from "../deer/Deer";
-import { Hunt, type Banner, type HuntStatus, type HuntSummary } from "./Hunt";
+import { Hunt, type Banner, type HuntMode, type HuntStatus, type HuntSummary } from "./Hunt";
 import { alertSound, boltSound, hitSound, impactSound, reloadSound, setListenerYaw, shotSound } from "./audio";
 
 export const WIDE_HFOV = 70; // degrees across the screen in the open view
@@ -474,7 +474,7 @@ void main() {
 
   // ---------- hunt ----------
 
-  startHunt() {
+  startHunt(mode: HuntMode = "classic") {
     this.hunt?.dispose();
     this.rounds = Infinity;
     this.mag = MAG_SIZE;
@@ -492,7 +492,7 @@ void main() {
       bulletsInFlight: () => this.bullets.length,
       setTargets: (t) => { this.targets = t; },
       buckOut: (d) => { this.alerts.push({ deer: d, t: 0 }); alertSound(d.azimuth()); },
-    }, this.deerAsset, this.events.banner, this.events.score, this.events.status);
+    }, this.deerAsset, this.events.banner, this.events.score, this.events.status, mode);
     this.alerts = [];
     this.events.score(0);
     this.pushHud();

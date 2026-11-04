@@ -97,6 +97,9 @@ Tap the **🦌** at the top left of the map. Hold the phone sideways.
   the scope moves left), and **Aim speed** can be Slow, Normal or Fast. Saved on each phone.
 - **Buck out!** A soft chime and a banner say when a buck steps out and which side he's on; a yellow
   ring marks him for a few seconds (with the scope up, an arrow on its edge points his way).
+- **Classic or Turbo** (pick on the game's menu). **Turbo:** each level is one minute to drop a number
+  of bucks (3, then 4, 5…). They keep coming, several at once, faster and farther out every level.
+  Seconds left are bonus points; run out of time and the hunt is over. Turbo has its own leaderboard.
 - **Levels:** the first buck is close and stands broadside. Each buck you drop moves you up a level
   (farther, then walking, trotting and running, in fading light). Ammunition is unlimited, but if
   **3 bucks you shot at get away** (missed or wounded), the hunt is over.

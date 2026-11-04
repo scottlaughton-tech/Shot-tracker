@@ -33,6 +33,20 @@ load time: there are no 3D model or audio files. The only image files are CC0 ph
   (`sideOf`) and `Game` plays a soft chime panned his way and draws a marker for 3.5 s: a pulsing
   ring on him in the open view, or, through the scope when he isn't in it, an arrow on the rim
   pointing to him (`Game.drawAlerts`).
+- **Turbo** (menu choice, remembered per phone in `st:game-mode`; `Hunt.mode`): each level is
+  `TURBO_TIME` = 60 s to drop `quota` bucks (`TURBO` table in Hunt.ts: 3, 4, 5 … 10). Up to `atOnce`
+  are out at the same time (never more than are still needed + 1), a new one every `every` s, and
+  `tier` picks the Classic level whose ranges/speeds/light apply (standing time halved, no feeding
+  stops). Make the quota: +`TIME_BONUS` (15) points per whole second left, the rest are spooked
+  (`Deer.spook`), 3.5 s break, next level. Clock hits zero: bucks already hit hard still count when
+  they drop (overtime); otherwise "Time's up" and the hunt is over. No strikes; a wounded buck that
+  gets away still costs 75. The top bar shows the clock (red under 10 s) and bucks down / quota; the
+  last 5 seconds tick. No "Buck out!" banner in Turbo (the chime and marker are enough). Separate
+  leaderboard. `/game?autostart=1&turbo=1` starts a Turbo hunt straight away (testing).
+- **Keeping bucks in sight:** everything they do in the open happens within ±30° (`VIEW` in
+  routes.ts; the open view shows ±35° and the buttons cover part of the right). Their spot and legs
+  must be ≥ 10 m from the bush edge and clear of the hedgerow and swale along the whole walk
+  (`clearPath`). They wait 5 m inside the cover, and leaving (or fleeing) they're gone 6–8 m in.
 - **Strikes:** a buck that was in the field when you fired and then gets away (missed or wounded) is a
   strike; three ends the hunt. A buck you never shot at doesn't count, and another one comes.
 - **⛶ Full screen:** Fullscreen API + landscape lock where allowed (Android, desktop). iPhone Safari
@@ -53,8 +67,9 @@ load time: there are no 3D model or audio files. The only image files are CC0 ph
 ```
 app/game/page.tsx          auth check → <GameShell/> (landscape viewport, no zoom)
 app/game/debug/page.tsx    developer previews: /game/debug?show=atlas|bark|trees|deer|deer:row|deer:walk|deer:trot|deer:run|deer:dead|deer:front|deer:quarter
-app/api/game/scores/       GET top 20 · POST a finished hunt (shared leaderboard)
-lib/store.ts               topScores/addScore: Redis sorted set "shot-tracker:game-scores" (kept apart
+app/api/game/scores/       GET top 20 (?mode=classic|turbo) · POST a finished hunt with its mode
+lib/store.ts               topScores/addScore: Redis sorted sets "shot-tracker:game-scores" (Classic) and
+                           "shot-tracker:game-scores:turbo" (Turbo) (kept apart
                            from the map's single hash so the map refresh stays one read)
 game/
   ballistics.ts            .308 Win 150 gr, G1 drag, 200 m zero: trajectory stepper + drop table (tested)
@@ -179,7 +194,8 @@ public/game/tex/           photo textures (see CREDITS.txt) and atlas.webp
   popping in the scope fixed, faster pace (bucks out ~2 s after being sent, short walk to their
   spot, 2–3.5 s between bucks), and a "Buck out!" alert (banner, chime, ring / scope-rim arrow).
   Then (party feedback): Controls screen with reversed slide (drag the view) and aim speed, and much
-  cheaper vegetation rebuilds so sweeping the scope is smooth.
+  cheaper vegetation rebuilds so sweeping the scope is smooth. Then: Turbo mode (own leaderboard),
+  and bucks kept in sight (within ±30°, out in the open, not lingering in the bush).
 - Waiting on the owner's real-phone test: load time, smoothness (open view and scope), aim speed,
   whether level 1 is easy enough, sound, anything that looks wrong. Tune from their answers.
 - Test scripts used during development (Playwright, SwiftShader) lived in the session scratchpad and

@@ -51,7 +51,7 @@ app/
   api/trails/route.ts          GET all imported trails · POST one (parsed from GPX in the browser)
   api/trails/[id]/route.ts     DELETE one trail
   game/page.tsx                Last Light, the hunting game (opened from the 🦌 in the top bar) – see docs/GAME.md
-  api/game/scores/route.ts     game leaderboard: GET top 20 · POST a finished hunt
+  api/game/scores/route.ts     game leaderboard: GET top 20 (?mode=classic|turbo) · POST a finished hunt (with mode)
 game/                          everything for the game (three.js engine, world, deer) – see docs/GAME.md
 components/
   App.tsx          state hub: polling, alerts/toasts, layers, modes (crosshair, ruler, quick shot), top bar, buttons
@@ -112,8 +112,8 @@ shot/sighting times within the **last 48 h**).
   unlocks it with `PARTY_PASSCODE` and serves it first in `GET /api/trails` (marked `builtIn`, can't
   be deleted). Made with `PASSCODE='…' node --experimental-strip-types scripts/encrypt-trails.mjs
   file.gpx`. **If the passcode is changed, the built-in trails quietly disappear** until the file is
-  re-made with the new passcode (the GPX isn't in the repo; ask the owner for it). The game leaderboard is a sorted set
-  `shot-tracker:game-scores` (see docs/GAME.md).
+  re-made with the new passcode (the GPX isn't in the repo; ask the owner for it). The game leaderboards are sorted sets
+  `shot-tracker:game-scores` (Classic) and `shot-tracker:game-scores:turbo` (Turbo) (see docs/GAME.md).
 
 ## API summary
 

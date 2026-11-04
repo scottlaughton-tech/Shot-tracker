@@ -81,20 +81,25 @@ export async function setInterval(min: number): Promise<void> {
 const SCORES = "shot-tracker:game-scores";
 const KEEP = 200;
 
-export type GameScore = { id: string; name: string; score: number; kills: number; shots: number; level?: number; best: string | null; at: number };
+export type GameMode = "classic" | "turbo";
+export type GameScore = { id: string; name: string; score: number; kills: number; shots: number; level?: number; mode?: GameMode; best: string | null; at: number };
 const gMem = globalThis as unknown as { __shotScores?: GameScore[] };
 const scoreMem: GameScore[] = (gMem.__shotScores ??= []);
 
-export async function topScores(limit = 20): Promise<GameScore[]> {
-  if (!redis) return [...scoreMem].sort((a, b) => b.score - a.score).slice(0, limit);
-  const rows = await redis.zrange<(string | GameScore)[]>(SCORES, 0, limit - 1, { rev: true });
+// Classic and Turbo scores can't be compared, so each has its own board (Classic keeps the old key).
+const scoresKey = (mode: GameMode) => (mode === "turbo" ? `${SCORES}:turbo` : SCORES);
+
+export async function topScores(limit = 20, mode: GameMode = "classic"): Promise<GameScore[]> {
+  if (!redis) return scoreMem.filter((s) => (s.mode ?? "classic") === mode).sort((a, b) => b.score - a.score).slice(0, limit);
+  const rows = await redis.zrange<(string | GameScore)[]>(scoresKey(mode), 0, limit - 1, { rev: true });
   return rows.map((r) => (typeof r === "string" ? JSON.parse(r) : r) as GameScore);
 }
 
 export async function addScore(s: GameScore): Promise<void> {
   if (!redis) { scoreMem.push(s); return; }
-  await redis.zadd(SCORES, { score: s.score, member: JSON.stringify(s) });
-  await redis.zremrangebyrank(SCORES, 0, -KEEP - 1); // keep the best KEEP
+  const key = scoresKey(s.mode ?? "classic");
+  await redis.zadd(key, { score: s.score, member: JSON.stringify(s) });
+  await redis.zremrangebyrank(key, 0, -KEEP - 1); // keep the best KEEP
 }
 
 // ---------- Trails (imported GPX) ----------

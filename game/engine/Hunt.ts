@@ -1,6 +1,10 @@
-// One hunt: a ladder of levels. One buck at a time; drop him and the next one is harder
-// (farther, moving faster, in dimmer light). A buck you shot at that gets away (missed or
-// wounded) is a strike. Three strikes and the hunt is over. Ammunition is unlimited.
+// One hunt: a ladder of levels, in one of two modes. Ammunition is unlimited in both.
+//  - Classic: one buck at a time; drop him and the next one is harder (farther, moving faster, in
+//    dimmer light). A buck you shot at that gets away (missed or wounded) is a strike; three
+//    strikes and the hunt is over.
+//  - Turbo: each level is one minute to drop a number of bucks. Several are out at once and they
+//    keep coming; every level wants more, sends them faster and farther out. Make the number and
+//    the seconds left are bonus points; run out of time and the hunt is over.
 import * as THREE from "three";
 import { Deer, type DeerStyle, type HitInfo } from "../deer/Deer";
 import { randomRack } from "../deer/antlers";
@@ -8,46 +12,24 @@ import type { DeerAsset } from "../deer/model";
 import { makeRoute } from "../deer/routes";
 import { mulberry32 } from "../world/noise";
 import { killScore, woundedEscape, ZONES, type BuckResult, type Part } from "../scoring";
+import { tickSound } from "./audio";
 
-export const STRIKES = 3;
-
-type Level = {
-  range: [number, number];  // metres from the stand
-  speed: number;            // crossing speed (m/s)
-  stand: number;            // seconds standing broadside once he's out
-  run: number;              // chance he comes through running instead
-  azim: number;             // how far left/right of straight ahead he may appear (degrees)
-  note: string;             // shown when you reach the level
-};
-
-/** The ladder. Past the last level, the last one repeats. */
-export const LEVELS: Level[] = [
-  { range: [70, 130], speed: 1.3, stand: 16, run: 0, azim: 22, note: "Close, standing broadside." },
-  { range: [110, 180], speed: 1.4, stand: 11, run: 0, azim: 28, note: "A little farther." },
-  { range: [160, 250], speed: 1.5, stand: 8, run: 0, azim: 34, note: "Farther out. Mind the drop." },
-  { range: [220, 330], speed: 1.6, stand: 5, run: 0, azim: 40, note: "He won't stand long." },
-  { range: [280, 420], speed: 3.3, stand: 4, run: 0, azim: 40, note: "Trotting now. Lead him." },
-  { range: [350, 520], speed: 3.6, stand: 3, run: 0.1, azim: 40, note: "Out past 350 m." },
-  { range: [420, 650], speed: 3.8, stand: 0, run: 0.2, azim: 40, note: "Long range. He won't stop." },
-  { range: [500, 800], speed: 3.8, stand: 0, run: 0.3, azim: 40, note: "Way out there." },
-  { range: [600, 950], speed: 4.0, stand: 0, run: 0.4, azim: 40, note: "As far as the field goes." },
-];
-
-export function levelAt(n: number): Level { return LEVELS[Math.min(LEVELS.length, n) - 1]; }
+import { levelAt, sideOf, STRIKES, TIME_BONUS, TURBO_TIME, turboAt, type HuntMode } from "../levels";
+export { LEVELS, levelAt, sideOf, STRIKES, TIME_BONUS, TURBO, TURBO_TIME, turboAt, type HuntMode } from "../levels";
 
 export type Banner = { id: number; title: string; detail?: string; points?: number; tone: "good" | "bad" | "info" | "alert" };
-
-/** Where a buck is, in words, from his direction (degrees right of straight ahead). */
-export function sideOf(azDeg: number): string {
-  if (azDeg < -22) return "Far left.";
-  if (azDeg < -7) return "On your left.";
-  if (azDeg <= 7) return "Straight out front.";
-  if (azDeg <= 22) return "On your right.";
-  return "Far right.";
-}
-export type HuntStatus = { level: number; strikes: number };
+export type HuntStatus = {
+  level: number;
+  strikes: number;
+  mode: HuntMode;
+  /** Turbo only: whole seconds left, bucks down this level, and how many it wants */
+  timeLeft?: number;
+  dropped?: number;
+  quota?: number;
+};
 
 export type HuntSummary = {
+  mode: HuntMode;
   score: number;
   kills: number;
   shots: number;
@@ -85,19 +67,39 @@ export class Hunt {
   /** bucks that have been shot at (a shot fired while they were in the field) */
   private shotAt = new Set<number>();
 
+  // Turbo
+  timeLeft = TURBO_TIME;
+  dropped = 0;
+  private phase: "play" | "overtime" | "break" = "play";
+  private breakLeft = 0;
+  private shownSec = -1;
+
   constructor(private host: Host, private asset: DeerAsset, private onBanner: (b: Banner) => void, private onScore: (s: number) => void,
-    private onStatus: (s: HuntStatus) => void, seed = Date.now()) {
+    private onStatus: (s: HuntStatus) => void, readonly mode: HuntMode = "classic", seed = Date.now()) {
     this.rnd = mulberry32(seed);
-    this.onStatus({ level: 1, strikes: 0 });
+    if (mode === "turbo") {
+      this.nextSpawn = 1;
+      this.banner({ title: "Level 1", detail: `Drop ${turboAt(1).quota} bucks in a minute.`, tone: "info" });
+    }
+    this.emitStatus();
   }
 
-  /** 0 at level 1, 1 once the sun is nearly down (level 10+). */
-  get dusk() { return Math.min(1, (this.level - 1) / 9); }
+  private emitStatus() {
+    if (this.mode === "classic") { this.onStatus({ level: this.level, strikes: this.strikes, mode: "classic" }); return; }
+    this.shownSec = Math.ceil(this.timeLeft);
+    this.onStatus({ level: this.level, strikes: 0, mode: "turbo", timeLeft: this.shownSec, dropped: this.dropped, quota: turboAt(this.level).quota });
+  }
+
+  /** The Classic level whose ranges, speeds and light apply now. */
+  private get tier() { return this.mode === "turbo" ? turboAt(this.level).tier : this.level; }
+
+  /** 0 at the first level, 1 once the sun is nearly down. */
+  get dusk() { return Math.min(1, (this.tier - 1) / 9); }
 
   private banner(b: Omit<Banner, "id">) { this.onBanner({ ...b, id: ++this.bannerId }); }
 
   private spawn() {
-    const L = levelAt(this.level);
+    const L = levelAt(this.tier);
     let route = null;
     for (let i = 0; i < 30 && !route; i++) route = makeRoute(this.rnd, L.range, (L.azim * Math.PI) / 180);
     for (let i = 0; i < 30 && !route; i++) route = makeRoute(this.rnd, [L.range[0] * 0.8, L.range[1] * 1.2], (40 * Math.PI) / 180);
@@ -105,9 +107,11 @@ export class Hunt {
     const id = ++this.spawned;
     const rack = randomRack(this.rnd);
     const running = this.rnd() < L.run;
+    const turbo = this.mode === "turbo";
     const style: DeerStyle = running
       ? { speed: 9 + this.rnd() * 2.5, stand: 0, stops: false }
-      : { speed: L.speed, stand: L.stand, stops: this.level < 7 };
+      // Turbo bucks don't hang about: half the standing time, no stopping to feed
+      : { speed: L.speed, stand: turbo ? Math.round(L.stand / 2) : L.stand, stops: !turbo && this.tier < 7 };
     const d = new Deer(id, this.asset, rack, route, { heightAt: this.host.heightAt, eye: this.host.eye }, {
       out: (deer) => this.onOut(deer),
       hit: (deer, info) => this.onHit(deer, info),
@@ -133,6 +137,7 @@ export class Hunt {
       this.deer = this.deer.filter((d) => !d.gone);
       this.host.setTargets(this.deer);
     }
+    if (this.mode === "turbo") { this.updateTurbo(dt); return; }
     const active = this.deer.filter((d) => d.alive).length;
     // one buck at a time; the next one a couple of seconds after the last is down or gone
     if (this.strikes < STRIKES && active === 0) {
@@ -149,6 +154,76 @@ export class Hunt {
     }
   }
 
+  private updateTurbo(dt: number) {
+    const T = turboAt(this.level);
+    if (this.endTimer >= 0) {
+      this.endTimer -= dt;
+      if (this.endTimer <= 0) this.over = true;
+      return;
+    }
+    if (this.phase === "break") {
+      this.breakLeft -= dt;
+      if (this.breakLeft <= 0) {
+        this.level++;
+        this.timeLeft = TURBO_TIME;
+        this.dropped = 0;
+        this.phase = "play";
+        this.nextSpawn = 1;
+        this.banner({ title: `Level ${this.level}`, detail: `Drop ${turboAt(this.level).quota} bucks in a minute.`, tone: "info" });
+        this.emitStatus();
+      }
+      return;
+    }
+    const alive = this.deer.filter((d) => d.alive);
+    const running = alive.filter((d) => d.lethal).length; // hit hard, will go down
+    if (this.phase === "play") {
+      this.timeLeft = Math.max(0, this.timeLeft - dt);
+      // keep them coming: up to `atOnce` out, but not more than are still needed (plus one)
+      const need = T.quota - this.dropped - running;
+      const roaming = alive.length - running;
+      this.nextSpawn -= dt;
+      if (roaming === 0) this.nextSpawn = Math.min(this.nextSpawn, 1);
+      if (need > 0 && roaming < Math.min(T.atOnce, need + 1) && this.nextSpawn <= 0) {
+        this.spawn();
+        this.nextSpawn = T.every * (0.8 + this.rnd() * 0.4);
+      }
+      const sec = Math.ceil(this.timeLeft);
+      if (sec !== this.shownSec) {
+        if (sec <= 5 && sec > 0) tickSound(sec === 1);
+        this.emitStatus();
+      }
+      if (this.dropped >= T.quota) return this.levelCleared(true);
+      if (this.timeLeft <= 0) {
+        this.phase = "overtime"; // bucks already hit hard still count when they go down
+        for (const d of alive) if (!d.lethal) d.spook();
+      }
+      return;
+    }
+    // overtime: wait for the last hit bucks to drop
+    if (this.dropped >= T.quota) return this.levelCleared(false);
+    if (running === 0 && this.host.bulletsInFlight() === 0) {
+      this.banner({ title: "Time's up", detail: `${this.dropped} of ${T.quota} down – the hunt is over.`, tone: "bad" });
+      this.endTimer = 2.5;
+    }
+  }
+
+  private levelCleared(inTime: boolean) {
+    const secs = inTime ? Math.floor(this.timeLeft) : 0;
+    const bonus = secs * TIME_BONUS;
+    this.score += bonus;
+    this.onScore(this.score);
+    this.banner({
+      title: `Level ${this.level} done!`,
+      detail: secs > 0 ? `${secs} seconds to spare.` : "Just made it.",
+      points: bonus || undefined,
+      tone: "good",
+    });
+    // the rest head for the bush; the next level starts after a short breather
+    for (const d of this.deer) if (d.alive && !d.lethal) d.spook();
+    this.phase = "break";
+    this.breakLeft = 3.5;
+  }
+
   /** Every shot: deer hear it after the sound gets to them. */
   shotFired() {
     this.shotsFired++;
@@ -163,7 +238,8 @@ export class Hunt {
 
   private onOut(deer: Deer) {
     if (this.over || !deer.alive) return;
-    this.banner({ title: "Buck out!", detail: sideOf((deer.azimuth() * 180) / Math.PI), tone: "alert" });
+    // (in Turbo they come thick and fast: the chime and the marker are enough)
+    if (this.mode === "classic") this.banner({ title: "Buck out!", detail: sideOf((deer.azimuth() * 180) / Math.PI), tone: "alert" });
     this.host.buckOut?.(deer);
   }
 
@@ -199,9 +275,14 @@ export class Hunt {
     this.score += k.total;
     if (!this.bestShot || k.total > this.bestShot.pts) this.bestShot = { pts: k.total, text: k.text };
     this.onScore(this.score);
+    if (this.mode === "turbo") {
+      // counts if he was hit before the clock ran out (he may go down a moment after)
+      if (this.phase !== "break") { this.dropped++; this.emitStatus(); }
+      return;
+    }
     // up a level
     this.level++;
-    this.onStatus({ level: this.level, strikes: this.strikes });
+    this.emitStatus();
     const lv = this.level;
     window.setTimeout(() => {
       if (!this.over) this.banner({ title: `Level ${lv}`, detail: levelAt(lv).note, tone: "info" });
@@ -211,6 +292,22 @@ export class Hunt {
   private onEscaped(deer: Deer, wounded: boolean) {
     const r = this.results.get(deer.id)!;
     const shot = wounded || this.shotAt.has(deer.id);
+    if (this.mode === "turbo") {
+      // no strikes in Turbo; a wounded buck that gets away still costs points
+      if (wounded) {
+        const w = woundedEscape();
+        r.status = "wounded-escaped";
+        r.score = w.total;
+        r.parts = w.parts;
+        this.score += w.total;
+        this.onScore(this.score);
+        this.banner({ title: "Wounded buck got away", points: w.total, tone: "bad" });
+      } else if (shot) {
+        r.status = "escaped";
+        r.parts = [{ label: "Got away", pts: 0 }];
+      }
+      return;
+    }
     if (wounded) {
       const w = woundedEscape();
       r.status = "wounded-escaped";
@@ -224,7 +321,7 @@ export class Hunt {
     }
     if (shot) {
       this.strikes++;
-      this.onStatus({ level: this.level, strikes: this.strikes });
+      this.emitStatus();
       const left = STRIKES - this.strikes;
       this.banner({
         title: `${wounded ? "Wounded buck got away" : "He got away"} – strike ${this.strikes}`,
@@ -239,7 +336,7 @@ export class Hunt {
 
   summary(): HuntSummary {
     return {
-      score: this.score, kills: this.kills, shots: this.shotsFired, level: this.level,
+      mode: this.mode, score: this.score, kills: this.kills, shots: this.shotsFired, level: this.level,
       bucks: [...this.results.values()].filter((b) => b.status !== "passed"),
       best: this.bestShot?.text ?? null,
     };

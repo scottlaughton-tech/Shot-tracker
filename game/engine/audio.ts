@@ -183,6 +183,13 @@ export function alertSound(az?: number) {
   tone(t + 0.13, 1175, 1175, 0.55, 0.04, "sine", 0.15, pan);
 }
 
+/** Turbo clock, last seconds: a soft tick (a higher one on the last second). */
+export function tickSound(last = false) {
+  if (!ctx) return;
+  const t = ctx.currentTime + 0.01;
+  tone(t, last ? 1320 : 990, last ? 1320 : 990, 0.09, 0.05, "square");
+}
+
 // ---------- ambience ----------
 
 export function startAmbience() {

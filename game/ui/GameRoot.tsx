@@ -5,7 +5,7 @@
 //  - Controls screen: normal or reversed slide, aim speed (saved on the phone)
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Game, Hud } from "../engine/Game";
-import { STRIKES, type Banner, type HuntStatus, type HuntSummary } from "../engine/Hunt";
+import { STRIKES, type Banner, type HuntMode, type HuntStatus, type HuntSummary } from "../engine/Hunt";
 import type { GameScore } from "@/lib/store";
 import { isMuted, setMuted, startAmbience, unlockAudio } from "../engine/audio";
 import DeerDiagram from "./DeerDiagram";
@@ -21,6 +21,9 @@ function isStandalone() {
   return typeof window !== "undefined" && (window.matchMedia("(display-mode: standalone)").matches || (navigator as Navigator & { standalone?: boolean }).standalone === true);
 }
 
+function loadMode(): HuntMode { try { return localStorage.getItem("st:game-mode") === "turbo" ? "turbo" : "classic"; } catch { return "classic"; } }
+function saveMode(m: HuntMode) { try { localStorage.setItem("st:game-mode", m); } catch {} }
+const clock = (s = 0) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 function loadName() { try { return localStorage.getItem("st:name") ?? ""; } catch { return ""; } }
 function saveName(v: string) { try { localStorage.setItem("st:name", v); } catch {} }
 
@@ -42,7 +45,7 @@ export default function GameRoot() {
   const [ready, setReady] = useState(false);
   const [hud, setHud] = useState<Hud | null>(null);
   const [score, setScore] = useState(0);
-  const [status, setStatus] = useState<HuntStatus>({ level: 1, strikes: 0 });
+  const [status, setStatus] = useState<HuntStatus>({ level: 1, strikes: 0, mode: "classic" });
   const [banners, setBanners] = useState<Banner[]>([]);
   const [summary, setSummary] = useState<HuntSummary | null>(null);
   const [portrait, setPortrait] = useState(false);
@@ -51,6 +54,9 @@ export default function GameRoot() {
   const [fsTip, setFsTip] = useState(false);
   const [isFs, setIsFs] = useState(false);
   const [controls, setControls] = useState<Controls>(DEFAULT_CONTROLS);
+  const [mode, setMode] = useState<HuntMode>("classic");
+  useEffect(() => setMode(loadMode()), []);
+  const chooseMode = (m: HuntMode) => { setMode(m); saveMode(m); };
   const controlsRef = useRef(controls);
   const applyControls = (c: Controls) => {
     controlsRef.current = c;
@@ -104,7 +110,8 @@ export default function GameRoot() {
         if (disposed) return;
         game.start();
         setReady(true);
-        if (new URLSearchParams(location.search).has("autostart")) { game.startHunt(); setScreen("play"); }
+        const q = new URLSearchParams(location.search);
+        if (q.has("autostart")) { game.startHunt(q.has("turbo") ? "turbo" : "classic"); setScreen("play"); }
       } catch (e) {
         console.error(e);
         setError("This phone's browser couldn't start the 3D graphics.");
@@ -185,7 +192,7 @@ export default function GameRoot() {
   const startHunt = () => {
     unlockAudio();
     startAmbience();
-    gameRef.current?.startHunt();
+    gameRef.current?.startHunt(mode);
     setSummary(null);
     setBanners([]);
     setScreen("play");
@@ -210,10 +217,19 @@ export default function GameRoot() {
             <button className="g-quit" onPointerDown={(e) => e.stopPropagation()} onClick={() => { setMuted(!isMuted()); setMute(isMuted()); }} aria-label={mute ? "Sound on" : "Sound off"}>{mute ? "🔇" : "🔊"}</button>
             {showFsButton && <button className="g-quit" onPointerDown={(e) => e.stopPropagation()} onClick={toggleFullscreen} aria-label={isFs ? "Leave full screen" : "Full screen"}>{isFs ? "⤡" : "⛶"}</button>}
             {hud && <Ammo hud={hud} />}
-            <div className="g-level" aria-label={`Level ${status.level}, ${status.strikes} of ${STRIKES} strikes`}>
-              Level {status.level}
-              <span className="g-strikes">{Array.from({ length: STRIKES }, (_, i) => <span key={i} className={i < status.strikes ? "on" : ""}>✕</span>)}</span>
-            </div>
+            {status.mode === "turbo" ? (
+              <div className={`g-level${(status.timeLeft ?? 60) <= 10 ? " hurry" : ""}`}
+                aria-label={`Level ${status.level}, ${status.timeLeft} seconds left, ${status.dropped} of ${status.quota} bucks down`}>
+                Level {status.level}
+                <span className="g-clock">{clock(status.timeLeft)}</span>
+                <span className="g-count">{status.dropped}/{status.quota} 🦌</span>
+              </div>
+            ) : (
+              <div className="g-level" aria-label={`Level ${status.level}, ${status.strikes} of ${STRIKES} strikes`}>
+                Level {status.level}
+                <span className="g-strikes">{Array.from({ length: STRIKES }, (_, i) => <span key={i} className={i < status.strikes ? "on" : ""}>✕</span>)}</span>
+              </div>
+            )}
           </div>
           <div className="g-score" aria-label="Score">{score} <span>pts</span></div>
           <div className="g-banners" aria-live="polite">
@@ -240,14 +256,23 @@ export default function GameRoot() {
 
       {screen === "menu" && (
         <div className="g-menu">
-          <div className="g-card">
+          <div className="g-card compact">
             <h1>Last Light</h1>
-            <p className="g-sub">An old field in the bush, the last hour of daylight. Every buck you drop takes you up a level: farther out, moving faster, the light fading.
-              <b> Three bucks that get away and you&apos;re out.</b></p>
+            {/* (with a hunt paused there's an extra button, so the choices go short to fit the screen) */}
+            <div className={`g-seg${gameRef.current?.hunt && !gameRef.current.hunt.over ? " brief" : ""}`} role="radiogroup" aria-label="Game">
+              <button role="radio" aria-checked={mode === "classic"} className={mode === "classic" ? "on" : ""} onClick={() => chooseMode("classic")}>
+                Classic<small>One buck at a time. 3 get away and you&apos;re out.</small>
+              </button>
+              <button role="radio" aria-checked={mode === "turbo"} className={mode === "turbo" ? "on" : ""} onClick={() => chooseMode("turbo")}>
+                Turbo<small>A minute a level to drop them all. More each level.</small>
+              </button>
+            </div>
             {error ? <p className="g-error">{error}</p> : (
               <>
                 {hud && gameRef.current?.hunt && !gameRef.current.hunt.over && (
-                  <button className="g-btn primary" onClick={() => { if (gameRef.current) gameRef.current.paused = false; setScreen("play"); }}>Back to the hunt</button>
+                  <button className="g-btn primary" onClick={() => { if (gameRef.current) gameRef.current.paused = false; setScreen("play"); }}>
+                    Back to the {gameRef.current.hunt.mode === "turbo" ? "Turbo " : ""}hunt
+                  </button>
                 )}
                 <button className={`g-btn ${gameRef.current?.hunt && !gameRef.current.hunt.over ? "" : "primary"}`} disabled={!ready} onClick={startHunt}>
                   {ready ? (gameRef.current?.hunt ? "Start a new hunt" : "Start the hunt") : `Building the woods… ${Math.round(progress.f * 100)}%`}
@@ -259,8 +284,10 @@ export default function GameRoot() {
               <button className="g-btn" onClick={() => setScreen("controls")}>Controls</button>
               <button className="g-btn" onClick={() => setScreen("board")}>Leaderboard</button>
             </div>
-            {showFsButton && <button className="g-btn" onClick={toggleFullscreen}>{isFs ? "Leave full screen" : "⛶ Full screen"}</button>}
-            <a className="g-btn" href="/">Back to the map</a>
+            <div className="g-row">
+              {showFsButton && <button className="g-btn" onClick={toggleFullscreen}>{isFs ? "Leave full screen" : "⛶ Full screen"}</button>}
+              <a className="g-btn" href="/">Back to the map</a>
+            </div>
           </div>
         </div>
       )}
@@ -283,7 +310,7 @@ export default function GameRoot() {
 
       {screen === "help" && <HowTo onClose={() => setScreen("menu")} />}
       {screen === "controls" && <ControlsCard value={controls} onChange={changeControls} onClose={() => setScreen("menu")} />}
-      {screen === "board" && <Board onClose={() => setScreen(summary ? "results" : "menu")} />}
+      {screen === "board" && <Board initial={summary?.mode ?? mode} onClose={() => setScreen(summary ? "results" : "menu")} />}
       {screen === "results" && summary && (
         <Results summary={summary} onAgain={startHunt} onBoard={() => setScreen("board")} onMenu={() => setScreen("menu")} />
       )}
@@ -319,7 +346,7 @@ function Results({ summary, onAgain, onBoard, onMenu }: { summary: HuntSummary; 
     saveName(n.trim());
     const res = await fetch("/api/game/scores", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: n.trim(), score: summary.score, kills: summary.kills, shots: summary.shots, level: summary.level, best: summary.best }),
+      body: JSON.stringify({ name: n.trim(), score: summary.score, kills: summary.kills, shots: summary.shots, level: summary.level, mode: summary.mode, best: summary.best }),
     }).catch(() => null);
     if (!res || !res.ok) { setState("error"); setMsg(res ? (await res.json().catch(() => ({}))).error ?? "Couldn't save" : "No connection"); return; }
     const j = await res.json();
@@ -334,7 +361,7 @@ function Results({ summary, onAgain, onBoard, onMenu }: { summary: HuntSummary; 
     <div className="g-menu">
       <div className="g-card wide">
         <h1>{summary.score} pts</h1>
-        <p className="g-sub">Reached <b>level {summary.level}</b> · {summary.kills} {summary.kills === 1 ? "buck" : "bucks"} down · {summary.shots} {summary.shots === 1 ? "shot" : "shots"} fired</p>
+        <p className="g-sub">{summary.mode === "turbo" ? "Turbo · " : ""}Reached <b>level {summary.level}</b> · {summary.kills} {summary.kills === 1 ? "buck" : "bucks"} down · {summary.shots} {summary.shots === 1 ? "shot" : "shots"} fired</p>
         {summary.bucks.length === 0 ? <p className="g-sub">No bucks hit this time.</p> : (
           <div className="g-bucks">
             {summary.bucks.map((b) => (
@@ -367,16 +394,24 @@ function Results({ summary, onAgain, onBoard, onMenu }: { summary: HuntSummary; 
   );
 }
 
-function Board({ onClose }: { onClose: () => void }) {
+function Board({ initial, onClose }: { initial: HuntMode; onClose: () => void }) {
+  const [tab, setTab] = useState<HuntMode>(initial);
   const [rows, setRows] = useState<GameScore[] | null>(null);
   const [err, setErr] = useState("");
   useEffect(() => {
-    fetch("/api/game/scores").then((r) => r.json()).then((j) => setRows(j.scores ?? [])).catch(() => setErr("Couldn't load the leaderboard."));
-  }, []);
+    let live = true;
+    setRows(null); setErr("");
+    fetch(`/api/game/scores?mode=${tab}`).then((r) => r.json()).then((j) => { if (live) setRows(j.scores ?? []); }).catch(() => { if (live) setErr("Couldn't load the leaderboard."); });
+    return () => { live = false; };
+  }, [tab]);
   return (
     <div className="g-menu">
       <div className="g-card wide">
         <h1>Leaderboard</h1>
+        <div className="g-seg" role="tablist" aria-label="Which game">
+          <button role="tab" aria-selected={tab === "classic"} className={tab === "classic" ? "on" : ""} onClick={() => setTab("classic")}>Classic</button>
+          <button role="tab" aria-selected={tab === "turbo"} className={tab === "turbo" ? "on" : ""} onClick={() => setTab("turbo")}>Turbo</button>
+        </div>
         {err && <p className="g-error">{err}</p>}
         {!rows && !err && <p className="g-sub">Loading…</p>}
         {rows && rows.length === 0 && <p className="g-sub">No scores yet. Be the first.</p>}
@@ -448,6 +483,7 @@ function HowTo({ onClose }: { onClose: () => void }) {
           <li><b>Moving bucks:</b> the bullet takes time to get there. Aim ahead of him. Each drop mark is as wide as the lead for a <b>walking</b> buck at that range. The dots are for a <b>trotting</b> buck.</li>
           <li><b>Where to hit:</b> behind the shoulder (heart and lungs) or the head scores best. Neck and spine drop him. Gut, rump and legs only wound. A wounded buck runs, so finish him or lose points.</li>
           <li><b>Score:</b> every buck down earns points, plus more for a better hit, a longer shot, a moving buck, a one-shot kill and a bigger rack.</li>
+          <li><b>Turbo</b> (pick it on the menu): each level is <b>one minute</b> to drop a number of bucks (3 at level 1, then 4, 5…). They keep coming, several at once, faster and farther out every level. Make the number and every second left is bonus points; run out of time and the hunt is over.</li>
           <li><b>Levels:</b> the first buck is close and stands broadside. Every buck you drop takes you up a level: farther out, then walking, trotting and running, and the light fades.</li>
           <li><b>Strikes:</b> if a buck you shot at gets away (missed or wounded), that&apos;s a strike. Three strikes and the hunt is over. A buck you never shot at doesn&apos;t count.</li>
           <li>Ammunition is unlimited. The rifle holds 5; reloading takes a few seconds.</li>

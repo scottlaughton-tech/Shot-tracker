@@ -112,6 +112,11 @@ export class Deer {
     } });
   }
 
+  /** Run for the nearest cover now (the end of a Turbo level). */
+  spook() {
+    if (this.alive && !this.lethal && this.state !== "flee" && this.state !== "wounded" && this.state !== "kick" && this.state !== "gone") this.flee();
+  }
+
   private flee(tail: TailMode = "flag") {
     const dist = this.pos.distanceTo(this.world.eye);
     if (!this.wounded && !this.lethal && this.state !== "flee" && dist < 220 && Math.random() < 0.6) snortSound(dist / SPEED_OF_SOUND + 0.2, dist, this.azimuth());

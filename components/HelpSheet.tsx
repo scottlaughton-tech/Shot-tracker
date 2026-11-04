@@ -100,6 +100,7 @@ export default function HelpSheet({ onClose }: { onClose: () => void }) {
             <li>Tap the <b>🦌</b> at the top left to open the game. Turn your phone <b>sideways</b>.</li>
             <li><b>Tap</b> where you want to look: the scope comes up there and stays up. <b>Slide</b> your finger to aim, then press the red <b>FIRE</b> button with your other thumb. The red <b>✕</b> lowers the rifle.</li>
             <li>When a buck steps out of the bush you&apos;ll hear a soft chime and see <b>Buck out!</b> with which side he&apos;s on. A yellow ring marks him for a few seconds; with the scope up, a yellow arrow on its edge points his way.</li>
+            <li>Pick <b>Classic</b> or <b>Turbo</b> on the game&apos;s menu. In Turbo each level is <b>one minute</b> to drop a number of bucks (3, then 4, 5…), several at once; seconds left are bonus points. Turbo has its own leaderboard.</li>
             <li>The first buck is close and easy. Every buck you drop takes you up a <b>level</b>: farther out and moving faster. If <b>3 bucks</b> you shot at get away, the hunt is over.</li>
             <li>Want sliding to work the other way round (slide right, scope moves left), or faster or slower aiming? Tap <b>Controls</b> on the game&apos;s menu. It&apos;s saved on your phone.</li>
             <li><b>⛶</b> makes it full screen. On iPhone, add the game to your home screen for full screen.</li>
