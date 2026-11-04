@@ -150,6 +150,16 @@ public/game/tex/           photo textures (see CREDITS.txt) and atlas.webp
 - Headless Chromium renders WebGL with SwiftShader (CPU): a frame can take seconds, so use
   `debugAdvance` instead of waiting, and long screenshot timeouts.
 
+## Status (keep this up to date)
+
+- Live on main since Nov 2026. Latest owner feedback handled: difficulty ramps by level (3 strikes),
+  scope opens where you tap and stays up, full-screen button.
+- Waiting on the owner's real-phone test: load time, smoothness (open view and scope), aim speed,
+  whether level 1 is easy enough, sound, anything that looks wrong. Tune from their answers.
+- Test scripts used during development (Playwright, SwiftShader) lived in the session scratchpad and
+  are not in the repo; the debug helpers above (`?debug=1`, `debugAdvance`, `debugView`,
+  `debugPerfectAim`) are enough to rebuild them.
+
 ## Known limitations / ideas
 
 - Photo textures came from GitHub mirrors of the Poly Haven originals (the cloud environment blocks
