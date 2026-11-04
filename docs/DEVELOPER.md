@@ -106,7 +106,13 @@ shot/sighting times within the **last 48 h**).
   lines: [[lat,lon]…][], addedBy, at}`), loaded once when the map opens, not on the 10 s refresh.
   The GPX is parsed in the browser (`lib/gpx.ts`, tested in `lib/gpx.test.ts`) and very detailed
   files are simplified (Douglas–Peucker) to ≤ 20k points before upload. They're deliberately kept out
-  of the repository because the GitHub repo is public. The game leaderboard is a sorted set
+  of the repository because the GitHub repo is public.
+- **Built-in trails** (`lib/builtinTrails.ts`): the party's main trail map ships *encrypted* in
+  `lib/trails.enc.json` (AES-256-GCM, key = scrypt of the lowercase party passcode). The server
+  unlocks it with `PARTY_PASSCODE` and serves it first in `GET /api/trails` (marked `builtIn`, can't
+  be deleted). Made with `PASSCODE='…' node --experimental-strip-types scripts/encrypt-trails.mjs
+  file.gpx`. **If the passcode is changed, the built-in trails quietly disappear** until the file is
+  re-made with the new passcode (the GPX isn't in the repo; ask the owner for it). The game leaderboard is a sorted set
   `shot-tracker:game-scores` (see docs/GAME.md).
 
 ## API summary

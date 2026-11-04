@@ -101,7 +101,7 @@ export async function addScore(s: GameScore): Promise<void> {
 // Their own hash, loaded once when the map opens (not on every 10-second refresh).
 const TRAILS = "shot-tracker:trails";
 
-export type Trail = { id: string; name: string; color: string; lines: [number, number][][]; addedBy: string; at: number };
+export type Trail = { id: string; name: string; color: string; lines: [number, number][][]; addedBy: string; at: number; builtIn?: boolean };
 const tMem = globalThis as unknown as { __shotTrails?: Map<string, Trail> };
 const trailMem: Map<string, Trail> = (tMem.__shotTrails ??= new Map());
 

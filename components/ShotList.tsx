@@ -259,10 +259,10 @@ export default function ShotList(p: Props) {
               Everyone in the party will see the trails. They&apos;re kept in the party&apos;s database, not in the app&apos;s code.</p>
             {p.trails.length === 0 && <p className="muted empty">No trails added yet.</p>}
             {p.trails.map((t) => (
-              <Row key={t.id} badge="〰" color={t.color} edit={edit}
+              <Row key={t.id} badge="〰" color={t.color} edit={edit && !t.builtIn}
                 onOpen={() => p.onFocusTrail(t)} onDelete={() => p.onDeleteTrail(t.id)}
                 title={t.name}
-                sub={`${(trailLength(t.lines) / 1000).toFixed(1)} km · added by ${t.addedBy}`} />
+                sub={`${(trailLength(t.lines) / 1000).toFixed(1)} km · ${t.builtIn ? "the party's trails" : `added by ${t.addedBy}`}`} />
             ))}
           </>
         )}

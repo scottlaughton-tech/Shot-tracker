@@ -3,13 +3,15 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { isAuthed } from "@/lib/auth";
 import { addTrail, loadTrails, type Trail } from "@/lib/store";
+import { builtinTrails } from "@/lib/builtinTrails";
 
 const unauthorized = () => NextResponse.json({ error: "Not signed in" }, { status: 401 });
 const MAX_POINTS = 40000;
 
 export async function GET() {
   if (!(await isAuthed())) return unauthorized();
-  const trails = (await loadTrails()).sort((a, b) => a.at - b.at);
+  // the party's built-in trails (unlocked with the passcode) first, then imported ones
+  const trails = [...builtinTrails(), ...(await loadTrails()).sort((a, b) => a.at - b.at)];
   return NextResponse.json({ trails });
 }
 
