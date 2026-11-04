@@ -20,13 +20,14 @@ import { dropTable, LOAD_308, stepBullet, zeroAngle, type BulletState } from "..
 import { buildDeerAsset, type DeerAsset } from "../deer/model";
 import type { Deer } from "../deer/Deer";
 import { Hunt, type Banner, type HuntStatus, type HuntSummary } from "./Hunt";
-import { boltSound, hitSound, impactSound, reloadSound, setListenerYaw, shotSound } from "./audio";
+import { alertSound, boltSound, hitSound, impactSound, reloadSound, setListenerYaw, shotSound } from "./audio";
 
 export const WIDE_HFOV = 70; // degrees across the screen in the open view
 export const ZOOMS = [4, 6, 8, 12, 16];
 const FOV_AT_1X = 19.2; // a 4–16× hunting scope shows about 4.8° at 4×
 const AIM_SENSITIVITY = 0.65; // a slow drag across the whole scope moves the aim ~2/3 of a scope width
 const MAG_SIZE = 5;
+const ALERT_TIME = 3.5; // seconds the "buck out" marker shows
 // ammunition is unlimited (the hunt ends on three strikes); the magazine still holds 5
 const BOLT_TIME = 1.25;
 const RELOAD_TIME = 3.2;
@@ -477,11 +478,15 @@ void main() {
       eye: this.eye,
       bulletsInFlight: () => this.bullets.length,
       setTargets: (t) => { this.targets = t; },
+      buckOut: (d) => { this.alerts.push({ deer: d, t: 0 }); alertSound(d.azimuth()); },
     }, this.deerAsset, this.events.banner, this.events.score, this.events.status);
+    this.alerts = [];
     this.events.score(0);
     this.pushHud();
   }
   private endedSent = false;
+  /** "buck out" markers: a ring where he is, or an arrow on the scope's rim pointing to him */
+  private alerts: { deer: Deer; t: number }[] = [];
   private env: { update: (dusk: number) => void } | null = null;
   /** paused: the world keeps drawing but nothing moves (menu open, app in background) */
   paused = false;
@@ -571,6 +576,8 @@ void main() {
       if (this.hunt.over && !this.endedSent) { this.endedSent = true; this.endAim(true); this.events.end(this.hunt.summary()); }
     }
     this.effects.update(dt);
+    for (const a of this.alerts) a.t += dt;
+    if (this.alerts.length) this.alerts = this.alerts.filter((a) => a.t < ALERT_TIME && a.deer.alive && !a.deer.gone);
     this.sky.update(this.time);
     wind.uTime.value = this.time;
 
@@ -606,7 +613,10 @@ void main() {
     if (!moved && v.fov === fovDeg && v.scoped === this.scoped) return;
     Object.assign(v, { yaw, pitch, fov: fovDeg, scoped: this.scoped });
     const margin = this.scoped ? 1.45 : 1.1;
-    this.forest.update(yaw, (fov / 2) * margin + 0.002, mag);
+    // trees just out of view still cast shadows into it (the sun is low in the south-west)
+    const sd = this.sky.sunDir, hl = Math.hypot(sd.x, sd.z) || 1;
+    const shadow = { dx: -sd.x / hl, dz: -sd.z / hl, k: hl / Math.max(0.02, sd.y), max: 160 };
+    this.forest.update(yaw, (fov / 2) * margin + 0.002, mag, shadow);
     this.rocks.update(yaw, (fov / 2) * margin + 0.002, mag);
     // ground distances visible at the bottom and top of the view
     let rMin: number, rMax: number;
@@ -678,6 +688,7 @@ void main() {
       rd.render(this.scene, this.wideCam);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      this.drawAlerts(ctx);
       return;
     }
     const d = this.scopeD, x0 = this.scopeCx - d / 2, y0 = this.scopeCy - d / 2;
@@ -704,6 +715,44 @@ void main() {
       pxPerMil, zoom: this.zoom,
       jx: (Math.random() - 0.5) * 10 * s, jy: -14 * s + (Math.random() - 0.5) * 6 * s,
     });
+    this.drawAlerts(ctx);
+  }
+
+  /** "Buck out" markers on the overlay: a pulsing ring on him in the open view; through the scope,
+   * an arrow on the rim pointing his way if he isn't in it. */
+  private drawAlerts(ctx: CanvasRenderingContext2D) {
+    if (!this.alerts.length) return;
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.wideCam.updateMatrixWorld();
+    const p = new THREE.Vector3();
+    for (const a of this.alerts) {
+      const alpha = Math.max(0, Math.min(1, a.t / 0.15, (ALERT_TIME - a.t) / 0.8));
+      ctx.strokeStyle = ctx.fillStyle = `rgba(255, 212, 59, ${alpha})`;
+      a.deer.chest(p);
+      if (this.scoped) {
+        const dx = p.x - this.eye.x, dy = p.y - this.eye.y, dz = p.z - this.eye.z;
+        const da = Math.atan2(dx, -dz) - this.aimYaw;
+        const de = Math.atan2(dy, Math.hypot(dx, dz)) - this.aimPitch;
+        if (Math.hypot(da, de) > (THREE.MathUtils.degToRad(this.scopeFov()) / 2) * 0.85) {
+          const ang = Math.atan2(-de, da), r = this.scopeD / 2 + 17;
+          ctx.save();
+          ctx.translate(this.scopeCx + Math.cos(ang) * r, this.scopeCy + Math.sin(ang) * r);
+          ctx.rotate(ang);
+          ctx.beginPath(); ctx.moveTo(11, 0); ctx.lineTo(-6, -9); ctx.lineTo(-6, 9); ctx.closePath(); ctx.fill();
+          ctx.restore();
+        }
+      }
+      // where he is in the open view (not over the scope)
+      p.project(this.wideCam);
+      if (p.z > 1) continue;
+      const sx = ((p.x + 1) / 2) * this.w, sy = ((1 - p.y) / 2) * this.h;
+      if (this.scoped && Math.hypot(sx - this.scopeCx, sy - this.scopeCy) < this.scopeD / 2 + 30) continue;
+      const k = (a.t * 1.4) % 1;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(sx, sy, 11, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = `rgba(255, 212, 59, ${alpha * (1 - k)})`;
+      ctx.beginPath(); ctx.arc(sx, sy, 11 + k * 24, 0, Math.PI * 2); ctx.stroke();
+    }
   }
 
   pushHud() {

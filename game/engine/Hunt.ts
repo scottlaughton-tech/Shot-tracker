@@ -35,7 +35,16 @@ export const LEVELS: Level[] = [
 
 export function levelAt(n: number): Level { return LEVELS[Math.min(LEVELS.length, n) - 1]; }
 
-export type Banner = { id: number; title: string; detail?: string; points?: number; tone: "good" | "bad" | "info" };
+export type Banner = { id: number; title: string; detail?: string; points?: number; tone: "good" | "bad" | "info" | "alert" };
+
+/** Where a buck is, in words, from his direction (degrees right of straight ahead). */
+export function sideOf(azDeg: number): string {
+  if (azDeg < -22) return "Far left.";
+  if (azDeg < -7) return "On your left.";
+  if (azDeg <= 7) return "Straight out front.";
+  if (azDeg <= 22) return "On your right.";
+  return "Far right.";
+}
 export type HuntStatus = { level: number; strikes: number };
 
 export type HuntSummary = {
@@ -53,6 +62,8 @@ type Host = {
   eye: THREE.Vector3;
   bulletsInFlight: () => number;
   setTargets: (t: Deer[]) => void;
+  /** a buck just stepped out (for the on-screen marker and the chime) */
+  buckOut?: (d: Deer) => void;
 };
 
 export class Hunt {
@@ -66,7 +77,7 @@ export class Hunt {
   strikes = 0;
   over = false;
   private rnd: () => number;
-  private nextSpawn = 3;
+  private nextSpawn = 1.5;
   private endTimer = -1;
   private bannerId = 0;
   private bestShot: { pts: number; text: string } | null = null;
@@ -98,6 +109,7 @@ export class Hunt {
       ? { speed: 9 + this.rnd() * 2.5, stand: 0, stops: false }
       : { speed: L.speed, stand: L.stand, stops: this.level < 7 };
     const d = new Deer(id, this.asset, rack, route, { heightAt: this.host.heightAt, eye: this.host.eye }, {
+      out: (deer) => this.onOut(deer),
       hit: (deer, info) => this.onHit(deer, info),
       down: (deer) => this.onDown(deer),
       escaped: (deer, wounded) => this.onEscaped(deer, wounded),
@@ -122,10 +134,10 @@ export class Hunt {
       this.host.setTargets(this.deer);
     }
     const active = this.deer.filter((d) => d.alive).length;
-    // one buck at a time; the next one a few seconds after the last is down or gone
+    // one buck at a time; the next one a couple of seconds after the last is down or gone
     if (this.strikes < STRIKES && active === 0) {
       this.nextSpawn -= dt;
-      if (this.nextSpawn <= 0) { this.spawn(); this.nextSpawn = 4 + this.rnd() * 4; }
+      if (this.nextSpawn <= 0) { this.spawn(); this.nextSpawn = 2 + this.rnd() * 1.5; }
     }
     if (this.strikes >= STRIKES) {
       const unresolved = this.deer.some((d) => d.alive && d.lethal);
@@ -147,6 +159,12 @@ export class Hunt {
   impact(p: THREE.Vector3 | null, missInfo: string | null) {
     if (p) for (const d of this.deer) if (d.alive && d.pos.distanceTo(p) < 25) d.hearShot(p);
     if (missInfo !== null) this.banner({ title: "Miss", detail: missInfo || undefined, tone: "info" });
+  }
+
+  private onOut(deer: Deer) {
+    if (this.over || !deer.alive) return;
+    this.banner({ title: "Buck out!", detail: sideOf((deer.azimuth() * 180) / Math.PI), tone: "alert" });
+    this.host.buckOut?.(deer);
   }
 
   private onHit(deer: Deer, info: HitInfo) {

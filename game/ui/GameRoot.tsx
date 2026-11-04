@@ -392,6 +392,7 @@ function HowTo({ onClose }: { onClose: () => void }) {
           <li><b>Look:</b> tap the spot you want to look at. The scope comes up right there and <b>stays up</b>.</li>
           <li><b>Aim:</b> slide your finger anywhere to move the crosshairs. Lift and slide again as often as you like. A quick swipe moves farther.</li>
           <li><b>Look somewhere else:</b> tap another spot outside the scope and it jumps there. The red <b>✕</b> lowers the rifle.</li>
+          <li><b>Buck out!</b> When a buck steps out of the bush you hear a soft chime and a banner says which side he&apos;s on. A yellow ring marks him for a few seconds. With the scope up, a yellow arrow on its edge points his way.</li>
           <li><b>Listen:</b> a grunt or a snapping stick means a buck is close. The sound comes from his side.</li>
           <li><b>Shoot:</b> with your other thumb, press the red <b>FIRE</b> button.</li>
           <li><b>Zoom:</b> <b>+</b> and <b>−</b> change the scope from 4× to 16×.</li>

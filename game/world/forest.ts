@@ -83,6 +83,9 @@ type Inst = { model: number; x: number; y: number; z: number; s: number; rot: nu
 
 const LOD_NEAR = 75; // m (after dividing by magnification): closer than this gets the full model
 
+/** Where shadows fall: horizontal direction away from the sun, shadow length per metre of height, cap (m). */
+export type ShadowReach = { dx: number; dz: number; k: number; max: number };
+
 export class Forest {
   readonly group = new THREE.Group();
   models: TreeModel[] = [];
@@ -152,8 +155,9 @@ export class Forest {
       const model = list[Math.floor(hash2(Math.round(x * 3), Math.round(z * 3), 9) * list.length)];
       const info = SPECIES[sp];
       const want = info.h[0] + (info.h[1] - info.h[0]) * hash2(Math.round(x), Math.round(z), 13);
-      // trees just inside the edge are a bit shorter (more light, younger)
-      const edgeK = depth < 10 ? 0.75 + 0.025 * depth : 1;
+      // trees just inside the edge are a bit shorter (more light, younger). Hedgerow and swale
+      // trees stand out in the field (depth is negative there), so they're left full size.
+      const edgeK = inHedge || inSwale ? 1 : depth < 10 ? 0.75 + 0.025 * Math.max(0, depth) : 1;
       const s = (want / this.models[model].height) * edgeK;
       const y = this.heightAt(x, z) - 0.15;
       const shade = 1 - 0.5 * smoothstep(3, 40, depth); // darker deeper in the bush
@@ -207,6 +211,7 @@ export class Forest {
       }
     // islands get a few big pines to stand out
     for (const [ix, iz, rad] of ISLANDS) {
+      if (rad < 9) continue; // small brush clumps stay low
       const rnd = mulberry32(Math.round(ix * 13 + iz));
       for (let k = 0; k < Math.round(rad / 9); k++) {
         const a = rnd() * Math.PI * 2, rr = rnd() * rad * 0.6;
@@ -352,7 +357,7 @@ export class Forest {
    * Choose full models vs impostors for the current view. Cheap enough to run every frame,
    * but skipped unless the view (direction or magnification) has changed.
    */
-  update(yaw: number, halfH: number, magnification: number) {
+  update(yaw: number, halfH: number, magnification: number, shadow?: ShadowReach) {
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), pos = new THREE.Vector3();
     const col = new THREE.Color();
     for (const mm of this.barkMeshes) mm.count = 0;
@@ -365,13 +370,21 @@ export class Forest {
     for (const t of this.instances) {
       // horizontal visibility (trees are tall, so pitch is checked loosely)
       let da = t.azim - yaw;
-      if (Math.abs(da) > halfH + Math.atan2(this.models[t.model].radius * t.s, t.dist)) continue;
+      const angR = Math.atan2(this.models[t.model].radius * Math.abs(t.s), t.dist);
+      let seen = Math.abs(da) <= halfH + angR;
+      if (!seen && shadow) {
+        // out of view, but its shadow may fall into it (the sun is low): keep it as a cheap caster
+        const L = Math.min(shadow.max, this.models[t.model].height * t.s * shadow.k);
+        const tip = Math.atan2(t.x + shadow.dx * L, -(t.z + shadow.dz * L)) - yaw;
+        const lo = Math.min(da, tip) - angR, hi = Math.max(da, tip) + angR;
+        if (hi < -halfH || lo > halfH) continue;
+      } else if (!seen) continue;
       const eff = t.dist / magnification;
       pos.set(t.x, t.y, t.z);
       sc.setScalar(t.s);
       col.setScalar(t.shade);
       // full models only for trees that can actually be seen: near the edge of the cover
-      if (eff < LOD_NEAR && t.depth < 16) {
+      if (seen && eff < LOD_NEAR && t.depth < 16) {
         const bark = this.barkMeshes[t.model], leaf = this.leafMeshes[t.model];
         if (bark.count < bark.instanceMatrix.count) {
           q.setFromAxisAngle(up, t.rot);

@@ -25,6 +25,8 @@ export type DeerStyle = {
 export type HitInfo = { zones: Zone[]; primary: Zone; outcome: Outcome; range: number; gait: Gait; point: THREE.Vector3; local: { y: number; z: number } };
 
 export type DeerEvents = {
+  /** he just stepped out of the cover into the open */
+  out: (d: Deer) => void;
   hit: (d: Deer, info: HitInfo) => void;
   down: (d: Deer) => void;
   escaped: (d: Deer, wounded: boolean) => void;
@@ -133,7 +135,7 @@ export class Deer {
         target = this.travelSpeed;
         // a long way to his spot: he trots in, then slows to a walk for the last stretch
         const spot = this.route[this.poseAt];
-        if (this.wp <= this.poseAt && spot && Math.hypot(spot.x - this.pos.x, spot.z - this.pos.z) > 45) target = Math.max(target, 3.2);
+        if (this.wp <= this.poseAt && spot && Math.hypot(spot.x - this.pos.x, spot.z - this.pos.z) > 12) target = Math.max(target, 3.2);
         this.nextStop -= dt;
         // rutting bucks grunt now and then while they cruise
         this.gruntT -= dt;
@@ -213,6 +215,7 @@ export class Deer {
           if (this.wp === 2 && this.state === "travel") {
             const dist = this.pos.distanceTo(this.world.eye);
             if (dist < 260 && Math.random() < 0.55) twigSound(dist / SPEED_OF_SOUND, dist, this.azimuth());
+            this.events.out(this);
           }
           // at his spot: easy bucks stop and stand broadside for a while
           if (this.wp === this.poseAt + 1 && this.state === "travel" && this.standLeft > 0 && !this.stood) {

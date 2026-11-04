@@ -13,11 +13,12 @@ let cache: CoverPoint[] | null = null;
 export function coverPoints(): CoverPoint[] {
   if (cache) return cache;
   const pts: CoverPoint[] = [];
-  const step = 9;
-  for (let z = -1000; z < -50; z += step) {
+  // a 9 m grid, finer (4.5 m) near the stand so the small brush clumps there get enough points
+  const NEAR = 260;
+  for (const [step, rMin, rMax] of [[9, NEAR, 980], [4.5, 60, NEAR]]) for (let z = -1000; z < -50; z += step) {
     for (let x = -700; x <= 700; x += step) {
       const r = Math.hypot(x, z), azim = Math.atan2(x, -z);
-      if (Math.abs(azim) > VIEW || r < 60 || r > 980) continue;
+      if (Math.abs(azim) > VIEW || r < rMin || r >= rMax) continue;
       const e = edgeDistance(x, z);
       if (e < -3 || e > 3) continue;
       // direction of increasing openness
@@ -42,38 +43,44 @@ export type Route = { points: P2[]; /** index of the spot where he stops broadsi
 export function makeRoute(rnd: () => number, range: [number, number], maxAzim = VIEW): Route | null {
   const pts = coverPoints();
   const [lo, hi] = range;
-  const near = pts.filter((p) => p.range >= lo - 60 && p.range <= hi + 220 && Math.abs(p.azim) <= maxAzim + 0.15);
+  // cover right at the band, so he steps out close to where he'll stand (wider only if there's none)
+  let near: CoverPoint[] = [];
+  for (const [below, above] of [[25, 40], [60, 120], [60, 220]]) {
+    near = pts.filter((p) => p.range >= lo - below && p.range <= hi + above && Math.abs(p.azim) <= maxAzim + 0.15);
+    if (near.length >= 6) break;
+  }
   if (!near.length) return null;
-  // prefer cover close to the band, so he isn't walking for minutes
-  near.sort((p, q) => Math.abs(p.range - (lo + hi) / 2) - Math.abs(q.range - (lo + hi) / 2));
-  const a = near[Math.floor(Math.pow(rnd(), 2) * Math.min(near.length, 60))];
-  const start = { x: a.x - a.outX * 18, z: a.z - a.outZ * 18 };
-  const out = { x: a.x + a.outX * (12 + rnd() * 15), z: a.z + a.outZ * (12 + rnd() * 15) };
+  // cover that's already inside the band if there's enough of it
+  const inside = near.filter((p) => p.range >= lo && p.range <= hi);
+  const pool = inside.length >= 4 ? inside : near;
+  const a = pool[Math.floor(rnd() * pool.length)];
+  // he waits just inside the cover, so he's out a few seconds after he's sent
+  const start = { x: a.x - a.outX * 7, z: a.z - a.outZ * 7 };
+  const out = { x: a.x + a.outX * (8 + rnd() * 10), z: a.z + a.outZ * (8 + rnd() * 10) };
   if (!open(out.x, out.z)) return null;
   const route: P2[] = [start, { x: a.x, z: a.z }, out];
-  // the spot inside the band, roughly in his direction from the stand
+  // the spot inside the band, a short walk from where he came out (searching wider if it's blocked)
   let target: P2 | null = null;
   for (let tries = 0; tries < 16 && !target; tries++) {
-    const r = lo + rnd() * (hi - lo);
-    const az = Math.max(-maxAzim, Math.min(maxAzim, a.azim + (rnd() - 0.5) * 0.35));
+    const w = 1 + tries * 0.3;
+    const r0 = Math.hypot(out.x, out.z);
+    // anywhere in the band, but no more than ~45 m closer (or ~10 m farther) than where he came out
+    const r = Math.max(lo, Math.min(hi, Math.max(r0 - 45 * w, Math.min(r0 + 10 * w, lo + rnd() * (hi - lo)))));
+    const az = Math.max(-maxAzim, Math.min(maxAzim, Math.atan2(out.x, -out.z) + (rnd() - 0.5) * (40 / r0) * w));
     const x = r * Math.sin(az), z = -r * Math.cos(az);
     if (open(x, z) && open((x + out.x) / 2, (z + out.z) / 2)) target = { x, z };
   }
   if (!target) return null;
   route.push(target);
   const poseAt = route.length - 1;
-  // cross the field, mostly sideways to the shooter, staying near the band
+  // one leg across the field, mostly sideways to the shooter, staying near the band
   let cur = target;
-  const legs = 1 + Math.floor(rnd() * 2);
-  for (let i = 0; i < legs; i++) {
-    let ok = false;
-    for (let tries = 0; tries < 12 && !ok; tries++) {
-      const r0 = Math.hypot(cur.x, cur.z);
-      const az = Math.atan2(cur.x, -cur.z) + (rnd() - 0.5) * 0.6;
-      const rr = Math.max(lo * 0.85, Math.min(hi * 1.1, r0 + (rnd() - 0.5) * 100));
-      const nx = rr * Math.sin(az), nz = -rr * Math.cos(az);
-      if (Math.abs(az) < maxAzim + 0.08 && open(nx, nz) && open((nx + cur.x) / 2, (nz + cur.z) / 2)) { cur = { x: nx, z: nz }; route.push(cur); ok = true; }
-    }
+  for (let tries = 0; tries < 12; tries++) {
+    const r0 = Math.hypot(cur.x, cur.z);
+    const az = Math.atan2(cur.x, -cur.z) + (rnd() - 0.5) * 0.6;
+    const rr = Math.max(lo * 0.85, Math.min(hi * 1.1, r0 + (rnd() - 0.5) * 100));
+    const nx = rr * Math.sin(az), nz = -rr * Math.cos(az);
+    if (Math.abs(az) < maxAzim + 0.08 && open(nx, nz) && open((nx + cur.x) / 2, (nz + cur.z) / 2)) { cur = { x: nx, z: nz }; route.push(cur); break; }
   }
   // leave at the nearest cover point that isn't where we came in
   const exits = pts.filter((p) => Math.hypot(p.x - a.x, p.z - a.z) > 60).sort((p, q) => Math.hypot(p.x - cur.x, p.z - cur.z) - Math.hypot(q.x - cur.x, q.z - cur.z));

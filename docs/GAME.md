@@ -20,8 +20,14 @@ load time: there are no 3D model or audio files. The only image files are CC0 ph
 - Unlimited ammunition: 5 in the rifle, then a 3.2 s reload. 1.25 s bolt cycle between shots.
 - **Levels** (`LEVELS` in `game/engine/Hunt.ts`): one buck at a time. Level 1 stands broadside at
   70–130 m; each buck you drop moves you up (farther, walking → trotting → some running, shorter
-  stands). Bucks walk (or trot) in from cover to a spot inside the level's range band
-  (`makeRoute` returns that spot as `poseAt`) and easy ones stand broadside there.
+  stands). Bucks wait just inside cover close to the level's range band (cover inside the band is
+  preferred), step out ~2 s after they're sent, and trot/walk a short way (≤ ~45 m) to a spot in the
+  band (`makeRoute` returns that spot as `poseAt`); easy ones stand broadside there. Then one leg
+  across the field and out. The next buck is sent 2–3.5 s after the last one is down or gone.
+- **Buck out!** When a buck steps out of cover (`DeerEvents.out`), `Hunt` shows a banner with his side
+  (`sideOf`) and `Game` plays a soft chime panned his way and draws a marker for 3.5 s: a pulsing
+  ring on him in the open view, or, through the scope when he isn't in it, an arrow on the rim
+  pointing to him (`Game.drawAlerts`).
 - **Strikes:** a buck that was in the field when you fired and then gets away (missed or wounded) is a
   strike; three ends the hunt. A buck you never shot at doesn't count, and another one comes.
 - **⛶ Full screen:** Fullscreen API + landscape lock where allowed (Android, desktop). iPhone Safari
@@ -98,6 +104,12 @@ public/game/tex/           photo textures (see CREDITS.txt) and atlas.webp
   - grass is generated only for the ground currently in view, on a grid whose cell size grows
     with `distance ÷ magnification`, so the scope at 16× shows dense grass around a buck 400 m away.
   - Vegetation is rebuilt only when the view has moved ~18% of its width (`Game.refreshVegetation`).
+  - The sun is low (WSW), so trees just outside the view still cast shadows into it: `Forest.update`
+    also keeps (as impostors) trees whose shadow reaches the view (`ShadowReach`). Without this,
+    shadows (and the shading of trees in view) switched on and off as the scope swept.
+  - Every tree's scale must be positive: a negative scale (once produced for hedgerow/swale trees out
+    in the field) flips full models underground and breaks the view test, so those trees popped in
+    and out through the scope.
 - **Scope:** true field of view = 19.2° ÷ power (a 4–16× hunting scope). Rendered with scissor into
   the circle's square; the reticle is drawn on a 2D canvas on top, in milliradians, so it's right at
   every magnification (first focal plane).
@@ -152,8 +164,10 @@ public/game/tex/           photo textures (see CREDITS.txt) and atlas.webp
 
 ## Status (keep this up to date)
 
-- Live on main since Nov 2026. Latest owner feedback handled: difficulty ramps by level (3 strikes),
-  scope opens where you tap and stays up, full-screen button.
+- Live on main since Nov 2026. Owner feedback handled: difficulty ramps by level (3 strikes),
+  scope opens where you tap and stays up, full-screen button; then (first real-phone test) trees
+  popping in the scope fixed, faster pace (bucks out ~2 s after being sent, short walk to their
+  spot, 2–3.5 s between bucks), and a "Buck out!" alert (banner, chime, ring / scope-rim arrow).
 - Waiting on the owner's real-phone test: load time, smoothness (open view and scope), aim speed,
   whether level 1 is easy enough, sound, anything that looks wrong. Tune from their answers.
 - Test scripts used during development (Playwright, SwiftShader) lived in the session scratchpad and

@@ -503,6 +503,7 @@ p { margin: 0; }
 }
 .g-banner.good { border-color: #51cf66; }
 .g-banner.bad { border-color: #ff6b6b; }
+.g-banner.alert { border-color: #ffd43b; }
 .g-banner b { font-size: 17px; }
 .g-pts { float: right; font-weight: 800; font-size: 17px; }
 .g-banner.good .g-pts { color: #8ce99a; }

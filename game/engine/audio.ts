@@ -175,6 +175,14 @@ export function twigSound(delay: number, range: number, az?: number) {
   burst(t + 0.012, 0.06, g * 0.5, "bandpass", 900, 2, 0.4, 40, pan);
 }
 
+/** A soft two-note chime when a buck steps out, from his side. */
+export function alertSound(az?: number) {
+  if (!ctx) return;
+  const t = ctx.currentTime + 0.02, pan = panFor(az);
+  tone(t, 784, 784, 0.35, 0.05, "sine", 0.15, pan);
+  tone(t + 0.13, 1175, 1175, 0.55, 0.04, "sine", 0.15, pan);
+}
+
 // ---------- ambience ----------
 
 export function startAmbience() {
