@@ -5,13 +5,13 @@ import { parseGpx, simplify, trailLength, DEFAULT_TRAIL_COLOR } from "./gpx.ts";
 const TOPO_MAPS = `<?xml version="1.0" encoding="UTF-8"?>
 <gpx xmlns="http://www.topografix.com/GPX/1/1" version="1.1" creator="Topo Maps">
 <trk>
-<name>Hunting Trails 2021 Update</name>
+<name>Ridge Loop</name>
 <desc>KML Import</desc>
 <cmt>yellow</cmt>
 <trkseg>
-<trkpt lat="45.120592" lon="-78.340666"><ele>0.0</ele></trkpt>
-<trkpt lat="45.120773" lon="-78.340344"><ele>0.0</ele></trkpt>
-<trkpt lat="45.121612" lon="-78.339494"><ele>0.0</ele></trkpt>
+<trkpt lat="46.500100" lon="-80.200100"><ele>0.0</ele></trkpt>
+<trkpt lat="46.500300" lon="-80.199800"><ele>0.0</ele></trkpt>
+<trkpt lat="46.501200" lon="-80.198900"><ele>0.0</ele></trkpt>
 </trkseg>
 </trk>
 </gpx>`;
@@ -19,10 +19,10 @@ const TOPO_MAPS = `<?xml version="1.0" encoding="UTF-8"?>
 test("reads a Topo Maps track with its name and colour", () => {
   const [t, ...rest] = parseGpx(TOPO_MAPS, "file");
   assert.equal(rest.length, 0);
-  assert.equal(t.name, "Hunting Trails 2021 Update");
+  assert.equal(t.name, "Ridge Loop");
   assert.equal(t.color, "#ffd43b");
   assert.equal(t.lines.length, 1);
-  assert.deepEqual(t.lines[0][0], [45.120592, -78.340666]);
+  assert.deepEqual(t.lines[0][0], [46.5001, -80.2001]);
   assert.equal(t.lines[0].length, 3);
 });
 
