@@ -364,6 +364,7 @@ void main() {
 
   fire(): boolean {
     if (!this.scoped || this.chamber !== "ready" || this.rounds <= 0) return false;
+    if (this.hunt && !this.hunt.canShoot) return false; // Turbo: the clock has run out / between levels
     const dir = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(this.aimPitch, -this.aimYaw, 0, "YXZ"));
     const up = new THREE.Vector3(0, 1, 0).applyEuler(new THREE.Euler(this.aimPitch, -this.aimYaw, 0, "YXZ"));
     const right = new THREE.Vector3().crossVectors(dir, up);

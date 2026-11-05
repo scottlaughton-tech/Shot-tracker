@@ -38,8 +38,11 @@ load time: there are no 3D model or audio files. The only image files are CC0 ph
   are out at the same time (never more than are still needed + 1), a new one every `every` s, and
   `tier` picks the Classic level whose ranges/speeds/light apply (standing time halved, no feeding
   stops). Make the quota: +`TIME_BONUS` (15) points per whole second left, the rest are spooked
-  (`Deer.spook`), 3.5 s break, next level. Clock hits zero: bucks already hit hard still count when
-  they drop (overtime); otherwise "Time's up" and the hunt is over. No strikes; a wounded buck that
+  (`Deer.spook`), 3.5 s break, next level. A fatal hit counts toward the number the moment it lands
+  (`Hunt.counted`), even if he runs a little before he drops; his points come when he does. At the
+  buzzer the rifle stops firing (`Hunt.canShoot`, also between levels), but bullets already on
+  their way still count; once they've landed and the bucks already hit are down, "Time's up" and
+  the hunt is over. (Before: a buck still falling at the buzzer didn't count.) No strikes; a wounded buck that
   gets away still costs 75. The top bar shows the clock (red under 10 s) and bucks down / quota; the
   last 5 seconds tick. No "Buck out!" banner in Turbo (the chime and marker are enough). Separate
   leaderboard. `/game?autostart=1&turbo=1` starts a Turbo hunt straight away (testing).

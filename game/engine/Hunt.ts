@@ -71,6 +71,8 @@ export class Hunt {
   timeLeft = TURBO_TIME;
   dropped = 0;
   private phase: "play" | "overtime" | "break" = "play";
+  /** bucks already counted toward a Turbo level (a fatal hit counts once, the moment it lands) */
+  private counted = new Set<number>();
   private breakLeft = 0;
   private shownSec = -1;
 
@@ -89,6 +91,12 @@ export class Hunt {
     this.shownSec = Math.ceil(this.timeLeft);
     this.onStatus({ level: this.level, strikes: 0, mode: "turbo", timeLeft: this.shownSec, dropped: this.dropped, quota: turboAt(this.level).quota });
   }
+
+  /** Turbo: no shooting once the clock has run out or between levels (shots already fired still count). */
+  get canShoot() { return this.mode === "classic" || this.phase === "play"; }
+
+  /** Bucks hit hard that haven't hit the ground yet (running, or falling: "dying"). */
+  private get stillGoingDown() { return this.deer.filter((d) => d.lethal && d.state !== "dead" && d.state !== "gone").length; }
 
   /** The Classic level whose ranges, speeds and light apply now. */
   private get tier() { return this.mode === "turbo" ? turboAt(this.level).tier : this.level; }
@@ -145,7 +153,7 @@ export class Hunt {
       if (this.nextSpawn <= 0) { this.spawn(); this.nextSpawn = 2 + this.rnd() * 1.5; }
     }
     if (this.strikes >= STRIKES) {
-      const unresolved = this.deer.some((d) => d.alive && d.lethal);
+      const unresolved = this.stillGoingDown > 0;
       if (!unresolved && this.host.bulletsInFlight() === 0 && this.endTimer < 0) this.endTimer = 2.5;
     }
     if (this.endTimer >= 0) {
@@ -174,13 +182,12 @@ export class Hunt {
       }
       return;
     }
-    const alive = this.deer.filter((d) => d.alive);
-    const running = alive.filter((d) => d.lethal).length; // hit hard, will go down
+    const roamers = this.deer.filter((d) => d.alive && !d.lethal);
     if (this.phase === "play") {
       this.timeLeft = Math.max(0, this.timeLeft - dt);
       // keep them coming: up to `atOnce` out, but not more than are still needed (plus one)
-      const need = T.quota - this.dropped - running;
-      const roaming = alive.length - running;
+      const need = T.quota - this.dropped;
+      const roaming = roamers.length;
       this.nextSpawn -= dt;
       if (roaming === 0) this.nextSpawn = Math.min(this.nextSpawn, 1);
       if (need > 0 && roaming < Math.min(T.atOnce, need + 1) && this.nextSpawn <= 0) {
@@ -194,14 +201,16 @@ export class Hunt {
       }
       if (this.dropped >= T.quota) return this.levelCleared(true);
       if (this.timeLeft <= 0) {
-        this.phase = "overtime"; // bucks already hit hard still count when they go down
-        for (const d of alive) if (!d.lethal) d.spook();
+        // the buzzer: no more shooting, but bullets already on their way still count
+        this.phase = "overtime";
+        for (const d of roamers) d.spook();
       }
       return;
     }
-    // overtime: wait for the last hit bucks to drop
+    // overtime: a bullet fired before the buzzer may still make the number; otherwise, once the
+    // bucks already hit have gone down (so their points are in), the hunt is over
     if (this.dropped >= T.quota) return this.levelCleared(false);
-    if (running === 0 && this.host.bulletsInFlight() === 0) {
+    if (this.stillGoingDown === 0 && this.host.bulletsInFlight() === 0) {
       this.banner({ title: "Time's up", detail: `${this.dropped} of ${T.quota} down – the hunt is over.`, tone: "bad" });
       this.endTimer = 2.5;
     }
@@ -261,6 +270,13 @@ export class Hunt {
     const ks = killScore({ zone: info.primary, range: info.range, gait: info.gait, antlerPoints: deer.rack.points, oneShot: r.shots === 1 });
     const text = `${z.label} · ${rack} · ${rangeTxt}`;
     this.pendingKill.set(deer.id, { ...ks, text });
+    // Turbo: a fatal hit counts toward the level the moment it lands, even if he runs a little
+    // before he drops (his points come when he does)
+    if (this.mode === "turbo" && this.phase !== "break" && !this.counted.has(deer.id)) {
+      this.counted.add(deer.id);
+      this.dropped++;
+      this.emitStatus();
+    }
     this.banner({ title: `${z.label}!`, detail: `${rack} buck at ${rangeTxt}${info.outcome === "drop" ? " – dropped him." : " – he won't go far."}`, points: ks.total, tone: "good" });
   }
 
@@ -275,11 +291,7 @@ export class Hunt {
     this.score += k.total;
     if (!this.bestShot || k.total > this.bestShot.pts) this.bestShot = { pts: k.total, text: k.text };
     this.onScore(this.score);
-    if (this.mode === "turbo") {
-      // counts if he was hit before the clock ran out (he may go down a moment after)
-      if (this.phase !== "break") { this.dropped++; this.emitStatus(); }
-      return;
-    }
+    if (this.mode === "turbo") return; // (he was counted toward the level when he was hit)
     // up a level
     this.level++;
     this.emitStatus();
