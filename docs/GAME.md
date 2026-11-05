@@ -47,6 +47,13 @@ load time: there are no 3D model or audio files. The only image files are CC0 ph
   routes.ts; the open view shows ±35° and the buttons cover part of the right). Their spot and legs
   must be ≥ 10 m from the bush edge and clear of the hedgerow and swale along the whole walk
   (`clearPath`). They wait 5 m inside the cover, and leaving (or fleeing) they're gone 6–8 m in.
+  **Line of sight:** `seenFromStand(x, z)` walks the sight line from the stand's eye (4.2 m up) to a
+  buck's chest; any bush or island on it (edge distance < 0; their trees are far taller than the
+  line), or ground above it, hides him. The cleared shooting lane (first 55 m) and the last 6 m
+  don't count. Cover points carry `seen` (tested 3 m out), only seen ones are used, and every
+  point of the walk in the open is checked too. Before this, bucks came out of the back of a
+  clump and stood behind it. Unit-tested in `game/deer/routes.test.ts` (npm test loads game
+  modules through `scripts/ts-resolve.mjs`).
 - **Strikes:** a buck that was in the field when you fired and then gets away (missed or wounded) is a
   strike; three ends the hunt. A buck you never shot at doesn't count, and another one comes.
 - **⛶ Full screen:** Fullscreen API + landscape lock where allowed (Android, desktop). iPhone Safari
@@ -195,7 +202,9 @@ public/game/tex/           photo textures (see CREDITS.txt) and atlas.webp
   spot, 2–3.5 s between bucks), and a "Buck out!" alert (banner, chime, ring / scope-rim arrow).
   Then (party feedback): Controls screen with reversed slide (drag the view) and aim speed, and much
   cheaper vegetation rebuilds so sweeping the scope is smooth. Then: Turbo mode (own leaderboard),
-  and bucks kept in sight (within ±30°, out in the open, not lingering in the bush).
+  and bucks kept in sight (within ±30°, out in the open, not lingering in the bush). Then: bucks
+  never come out of or stand behind cover (line-of-sight rule), and the brush clump 95 m out on the
+  right was removed (it hid a wedge of the field).
 - Waiting on the owner's real-phone test: load time, smoothness (open view and scope), aim speed,
   whether level 1 is easy enough, sound, anything that looks wrong. Tune from their answers.
 - Test scripts used during development (Playwright, SwiftShader) lived in the session scratchpad and

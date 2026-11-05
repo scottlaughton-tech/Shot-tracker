@@ -1,9 +1,10 @@
 // Where bucks come from and where they go: points just inside the cover along the field
 // edges, hedgerow and islands, and routes that cross the open ground between them.
-import { edgeDistance, sampleGround } from "../world/layout";
+import { edgeDistance, sampleGround, sampleGroundFast, STAND, type Ground } from "../world/layout";
 
 export type P2 = { x: number; z: number };
-export type CoverPoint = P2 & { range: number; azim: number; outX: number; outZ: number };
+/** `seen`: a buck stepping out of the cover here can be seen from the stand. */
+export type CoverPoint = P2 & { range: number; azim: number; outX: number; outZ: number; seen: boolean };
 
 // Keep bucks well inside the open view: it shows ±35°, and the buttons cover part of the right side.
 export const VIEW = (30 * Math.PI) / 180;
@@ -25,11 +26,37 @@ export function coverPoints(): CoverPoint[] {
       // direction of increasing openness
       const gx = edgeDistance(x + 3, z) - edgeDistance(x - 3, z), gz = edgeDistance(x, z + 3) - edgeDistance(x, z - 3);
       const gl = Math.hypot(gx, gz) || 1;
-      pts.push({ x, z, range: r, azim, outX: gx / gl, outZ: gz / gl });
+      const outX = gx / gl, outZ = gz / gl;
+      pts.push({ x, z, range: r, azim, outX, outZ, seen: seenFromStand(x + outX * 3, z + outZ * 3) });
     }
   }
   cache = pts;
   return pts;
+}
+
+const _g: Ground = { h: 0, edge: 0, open: 0, tall: 0, hedge: 0, swale: 0 };
+const LANE = 55; // the shooting lane in front of the stand is cleared this far (see forest.ts)
+
+/**
+ * Can you see a buck standing here from the stand? Nothing in the way: no bush or island (their
+ * trees are far taller than the line of sight) and no rise in the ground. The last few metres
+ * don't count (he may be standing right at the edge of the cover), nor does the cleared lane.
+ * Without this, bucks came out of the back of a clump of cover and stood behind it.
+ */
+export function seenFromStand(x: number, z: number): boolean {
+  const eyeY = sampleGroundFast(STAND.x, STAND.z, _g).h + STAND.eye;
+  const chestY = sampleGroundFast(x, z, _g).h + 0.9;
+  const d = Math.hypot(x - STAND.x, z - STAND.z);
+  const n = Math.ceil(d / 5);
+  for (let i = 1; i < n; i++) {
+    const t = i / n, along = d * t;
+    if (along < LANE) continue;
+    if (d - along < 6) break;
+    const g = sampleGroundFast(STAND.x + (x - STAND.x) * t, STAND.z + (z - STAND.z) * t, _g);
+    if (g.edge < 0) return false;
+    if (g.h > eyeY + (chestY - eyeY) * t - 0.25) return false;
+  }
+  return true;
 }
 
 /** Out in the open where he can be seen: clear of the bush edge, the hedgerow and the alder swale. */
@@ -38,9 +65,12 @@ function open(x: number, z: number) {
   const g = sampleGround(x, z);
   return g.hedge < 0.2 && g.swale < 0.25;
 }
-/** The whole walk from a to b stays in the open (checked at a few points along it). */
+/** The whole walk from a to b stays in the open and in sight of the stand (checked at a few points). */
 function clearPath(a: P2, b: P2) {
-  for (const t of [0.25, 0.5, 0.75, 1]) if (!open(a.x + (b.x - a.x) * t, a.z + (b.z - a.z) * t)) return false;
+  for (const t of [0.25, 0.5, 0.75, 1]) {
+    const x = a.x + (b.x - a.x) * t, z = a.z + (b.z - a.z) * t;
+    if (!open(x, z) || !seenFromStand(x, z)) return false;
+  }
   return true;
 }
 
@@ -58,7 +88,7 @@ export function makeRoute(rnd: () => number, range: [number, number], maxAzim = 
   // cover right at the band, so he steps out close to where he'll stand (wider only if there's none)
   let near: CoverPoint[] = [];
   for (const [below, above] of [[25, 40], [60, 120], [60, 220]]) {
-    near = pts.filter((p) => p.range >= lo - below && p.range <= hi + above && Math.abs(p.azim) <= maxAzim + 0.15);
+    near = pts.filter((p) => p.seen && p.range >= lo - below && p.range <= hi + above && Math.abs(p.azim) <= maxAzim + 0.15);
     if (near.length >= 6) break;
   }
   if (!near.length) return null;
@@ -69,7 +99,7 @@ export function makeRoute(rnd: () => number, range: [number, number], maxAzim = 
   // he waits just inside the cover, so he's out a few seconds after he's sent
   const start = { x: a.x - a.outX * 5, z: a.z - a.outZ * 5 };
   const out = { x: a.x + a.outX * (12 + rnd() * 8), z: a.z + a.outZ * (12 + rnd() * 8) };
-  if (!open(out.x, out.z)) return null;
+  if (!open(out.x, out.z) || !seenFromStand(out.x, out.z)) return null;
   const route: P2[] = [start, { x: a.x, z: a.z }, out];
   // the spot inside the band, a short walk from where he came out (searching wider if it's blocked)
   let target: P2 | null = null;

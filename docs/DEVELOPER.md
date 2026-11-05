@@ -195,7 +195,7 @@ Other behavior worth knowing:
 ```bash
 npm install
 npm run dev                              # http://localhost:3000 (no passcode, in-memory data)
-npm test                                 # math unit tests
+npm test                                 # unit tests (lib/, game/; game modules load via scripts/ts-resolve.mjs)
 npx tsc --noEmit -p . && npm run build   # type-check + production build
 PARTY_PASSCODE=t PORT=3123 npx next start   # production server with a passcode, after building
 ```
